@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BI Operacional — Rocha Telecom</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root {
     --bg: #0f172a; --card: #1e293b; --card2: #16213a; --text: #e2e8f0; --muted: #94a3b8;
@@ -34,6 +35,11 @@
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   tr:hover td { background: #22314f; }
   .table-wrap { max-height: 480px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; position: relative; height: 320px; }
+  .chart-box h4 { margin: 0 0 12px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .chart-box .canvas-wrap { position: relative; height: calc(100% - 28px); }
+  .chart-box.wide { grid-column: 1 / -1; height: 720px; }
   input.filtro { width: 100%; max-width: 320px; padding: 8px 10px; margin-bottom: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }
 </style>
@@ -46,7 +52,7 @@
   </div>
   <div class="badge-atualizacao">
     <div class="data">🕒 Atualizado em 01/07/2026</div>
-    <div class="gerado">Página gerada em 01/07/2026 14:05</div>
+    <div class="gerado">Página gerada em 01/07/2026 14:14</div>
   </div>
 </header>
 <main>
@@ -61,6 +67,11 @@
     <div class="card ok"><div class="label">Entrada no sistema realizada</div><div class="value">1718</div><div class="sub">63,2%</div></div>
     <div class="card warn"><div class="label">Entrada pendente no sistema</div><div class="value">1002</div><div class="sub">36,8%</div></div>
   </div>
+  <div class="charts">
+    <div class="chart-box"><h4>Status geral dos pedidos</h4><div class="canvas-wrap"><canvas id="chart-pedidos-status"></canvas></div></div>
+    <div class="chart-box"><h4>Entrada no sistema</h4><div class="canvas-wrap"><canvas id="chart-pedidos-entrada"></canvas></div></div>
+    <div class="chart-box wide"><h4>Pedidos por filial (entregue / pendente / atrasado)</h4><div class="canvas-wrap"><canvas id="chart-pedidos-filial"></canvas></div></div>
+  </div>
 </section>
 
 <section>
@@ -73,6 +84,9 @@
     <div class="card"><div class="label">Valor total pendente</div><div class="value">R$ 360.688,15</div></div>
     <div class="card bad"><div class="label">Maior atraso</div><div class="value">61 dias</div></div>
     <div class="card"><div class="label">Média de atraso</div><div class="value">10.2 dias</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box"><h4>Notas pendentes: atrasadas x no prazo</h4><div class="canvas-wrap"><canvas id="chart-notas-status"></canvas></div></div>
   </div>
   <h3>⚠️ Notas com criticidade elevada (atrasadas)</h3>
   <input class="filtro" data-target="tbl-notas" placeholder="Filtrar por filial, NF ou produto...">
@@ -174,6 +188,10 @@
     <div class="card warn"><div class="label">Atenção</div><div class="value">43</div></div>
     <div class="card bad"><div class="label">Crítico</div><div class="value">11</div></div>
   </div>
+  <div class="charts">
+    <div class="chart-box"><h4>Transferências por criticidade</h4><div class="canvas-wrap"><canvas id="chart-transf-status"></canvas></div></div>
+    <div class="chart-box"><h4>Tempo fora do estoque</h4><div class="canvas-wrap"><canvas id="chart-transf-prazo"></canvas></div></div>
+  </div>
   <h3>⚠️ Transferências com criticidade elevada</h3>
   <input class="filtro" data-target="tbl-transf" placeholder="Filtrar por filial, NF ou produto...">
   <div class="table-wrap">
@@ -207,6 +225,75 @@ document.querySelectorAll('input.filtro').forEach(function(inp) {
       tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
     });
   });
+});
+
+const CHART_DATA = {"pedidosStatus": {"labels": ["Entregue", "Pendente de entrada", "Atrasado"], "values": [1792, 851, 77]}, "pedidosEntrada": {"labels": ["Entrada realizada", "Entrada pendente"], "values": [1718, 1002]}, "pedidosFilial": {"labels": ["BAURU CALÇADÃO", "SHOPPING BANDEIRAS", "SHOPPING POLO", "SHOPPING TIVOLI", "MOGI BURITI", "VALINHOS", "JAÚ SHOPPING", "SHOPPING RIO CLARO", "PÁTIO LIMEIRA", "LIMEIRA CENTRO", "PIRACICABA CENTRO", "SHOPPING HORTOLANDIA", "SHOPPING IGUATEMI", "AMERICANA", "SUMARÉ", "PAULINIA CENTRO", "BAURU SHOPPING", "CAMPINAS 13 DE MAIO", "MARÍLIA", "VINHEDO CENTRO", "NOVA ODESSA", "SÃO JOÃO DA BOA VISTA", "ARARAS CENTRO", "SHOPPING PATIO CIANÊ", "ESCRITÓRIO"], "entregue": [178, 101, 98, 99, 47, 57, 109, 91, 97, 56, 53, 67, 95, 61, 70, 63, 82, 68, 55, 44, 54, 43, 43, 61, 0], "pendente": [98, 45, 39, 39, 37, 38, 38, 38, 36, 34, 33, 35, 32, 31, 31, 29, 30, 28, 24, 24, 25, 22, 22, 22, 0], "atrasado": [3, 4, 5, 4, 6, 5, 4, 4, 4, 6, 4, 2, 3, 4, 3, 4, 1, 2, 3, 2, 1, 2, 1, 0, 0]}, "notasStatus": {"labels": ["Atrasadas", "Aguardando (no prazo)"], "values": [80, 36]}, "transfStatus": {"labels": ["No prazo", "Atenção", "Crítico"], "values": [29, 43, 11]}, "transfPrazo": {"labels": ["0-3 dias", "4-7 dias", "8-15 dias", "16-30 dias", "30+ dias"], "values": [29, 9, 30, 4, 11]}};
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#334155';
+const COR_OK = '#22c55e', COR_WARN = '#f59e0b', COR_BAD = '#ef4444', COR_ACCENT = '#38bdf8';
+
+new Chart(document.getElementById('chart-pedidos-status'), {
+  type: 'doughnut',
+  data: {
+    labels: CHART_DATA.pedidosStatus.labels,
+    datasets: [{ data: CHART_DATA.pedidosStatus.values, backgroundColor: [COR_OK, COR_WARN, COR_BAD] }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+new Chart(document.getElementById('chart-pedidos-entrada'), {
+  type: 'doughnut',
+  data: {
+    labels: CHART_DATA.pedidosEntrada.labels,
+    datasets: [{ data: CHART_DATA.pedidosEntrada.values, backgroundColor: [COR_OK, COR_WARN] }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+new Chart(document.getElementById('chart-pedidos-filial'), {
+  type: 'bar',
+  data: {
+    labels: CHART_DATA.pedidosFilial.labels,
+    datasets: [
+      { label: 'Entregue', data: CHART_DATA.pedidosFilial.entregue, backgroundColor: COR_OK },
+      { label: 'Pendente', data: CHART_DATA.pedidosFilial.pendente, backgroundColor: COR_WARN },
+      { label: 'Atrasado', data: CHART_DATA.pedidosFilial.atrasado, backgroundColor: COR_BAD }
+    ]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: { x: { stacked: true }, y: { stacked: true } },
+    plugins: { legend: { position: 'bottom' } }
+  }
+});
+
+new Chart(document.getElementById('chart-notas-status'), {
+  type: 'doughnut',
+  data: {
+    labels: CHART_DATA.notasStatus.labels,
+    datasets: [{ data: CHART_DATA.notasStatus.values, backgroundColor: [COR_BAD, COR_OK] }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+new Chart(document.getElementById('chart-transf-status'), {
+  type: 'doughnut',
+  data: {
+    labels: CHART_DATA.transfStatus.labels,
+    datasets: [{ data: CHART_DATA.transfStatus.values, backgroundColor: [COR_OK, COR_WARN, COR_BAD] }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+});
+
+new Chart(document.getElementById('chart-transf-prazo'), {
+  type: 'bar',
+  data: {
+    labels: CHART_DATA.transfPrazo.labels,
+    datasets: [{ label: 'Transferências', data: CHART_DATA.transfPrazo.values, backgroundColor: COR_ACCENT }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
 });
 </script>
 </body>
