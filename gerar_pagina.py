@@ -6,6 +6,7 @@ Lê os 3 arquivos em "I:\\Meu Drive\\CONTROLE COMPRAS" e grava index.html
 nesta mesma pasta (bi-web), pronta para publicar no GitHub Pages.
 """
 import openpyxl
+from datetime import datetime
 from pathlib import Path
 
 BASE = Path(r"I:\Meu Drive\CONTROLE COMPRAS")
@@ -80,6 +81,8 @@ for r in data_rows:
 transf_criticas = [r for r in data_rows if r[11] == "CRÍTICO"]
 transf_criticas.sort(key=lambda r: (r[2] or 0), reverse=True)
 
+gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
+
 # ----------------------------------------------------------------- HTML
 def linhas_notas():
     out = []
@@ -119,9 +122,12 @@ html = f"""<!DOCTYPE html>
   }}
   * {{ box-sizing: border-box; }}
   body {{ margin:0; font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); }}
-  header {{ padding: 24px 32px; border-bottom: 1px solid var(--border); }}
+  header {{ padding: 24px 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }}
   header h1 {{ margin: 0 0 4px; font-size: 22px; }}
   header p {{ margin: 0; color: var(--muted); font-size: 14px; }}
+  .badge-atualizacao {{ background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; text-align: right; white-space: nowrap; }}
+  .badge-atualizacao .data {{ font-size: 15px; font-weight: 700; color: var(--accent); }}
+  .badge-atualizacao .gerado {{ font-size: 11px; color: var(--muted); margin-top: 2px; }}
   main {{ padding: 24px 32px 64px; max-width: 1200px; margin: 0 auto; }}
   section {{ margin-bottom: 40px; }}
   section > h2 {{ font-size: 18px; border-left: 4px solid var(--accent); padding-left: 10px; margin-bottom: 16px; }}
@@ -145,8 +151,14 @@ html = f"""<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <h1>📊 BI Operacional — Pedidos, Notas Fiscais e Transferências</h1>
-  <p>Atualizado em {data_atualizacao} · Giovanni Brochini</p>
+  <div>
+    <h1>📊 BI Operacional — Pedidos, Notas Fiscais e Transferências</h1>
+    <p>Giovanni Brochini · Rocha Telecom</p>
+  </div>
+  <div class="badge-atualizacao">
+    <div class="data">🕒 Atualizado em {data_atualizacao}</div>
+    <div class="gerado">Página gerada em {gerado_em}</div>
+  </div>
 </header>
 <main>
 
