@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BI Operacional — Rocha Telecom</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --card2: #16213a; --text: #e2e8f0; --muted: #94a3b8;
+    --ok: #22c55e; --warn: #f59e0b; --bad: #ef4444; --accent: #38bdf8; --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 24px 32px; border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  main { padding: 24px 32px 64px; max-width: 1200px; margin: 0 auto; }
+  section { margin-bottom: 40px; }
+  section > h2 { font-size: 18px; border-left: 4px solid var(--accent); padding-left: 10px; margin-bottom: 16px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .card .value { font-size: 26px; font-weight: 700; margin-top: 6px; }
+  .card .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .card.ok .value { color: var(--ok); }
+  .card.warn .value { color: var(--warn); }
+  .card.bad .value { color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; background: var(--card2); border-radius: 10px; overflow: hidden; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+  th { background: #0b1120; color: var(--muted); font-size: 11px; text-transform: uppercase; position: sticky; top: 0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #22314f; }
+  .table-wrap { max-height: 480px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+  input.filtro { width: 100%; max-width: 320px; padding: 8px 10px; margin-bottom: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 BI Operacional — Pedidos, Notas Fiscais e Transferências</h1>
+  <p>Atualizado em 01/07/2026 · Giovanni Brochini</p>
+</header>
+<main>
+
+<section>
+  <h2>📦 Pedidos GN — Status Geral</h2>
+  <div class="cards">
+    <div class="card"><div class="label">Total de pedidos</div><div class="value">2720</div></div>
+    <div class="card ok"><div class="label">Entregue</div><div class="value">1792</div><div class="sub">65,9%</div></div>
+    <div class="card warn"><div class="label">Pendente de entrada</div><div class="value">851</div><div class="sub">31,3%</div></div>
+    <div class="card bad"><div class="label">Atrasado</div><div class="value">77</div><div class="sub">2,8%</div></div>
+    <div class="card ok"><div class="label">Entrada no sistema realizada</div><div class="value">1718</div><div class="sub">63,2%</div></div>
+    <div class="card warn"><div class="label">Entrada pendente no sistema</div><div class="value">1002</div><div class="sub">36,8%</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>🧾 Notas Fiscais Pendentes de Entrada</h2>
+  <div class="cards">
+    <div class="card"><div class="label">Total de notas</div><div class="value">1578</div></div>
+    <div class="card warn"><div class="label">Pendentes</div><div class="value">116</div></div>
+    <div class="card bad"><div class="label">Atrasadas</div><div class="value">80</div></div>
+    <div class="card ok"><div class="label">Aguardando (no prazo)</div><div class="value">36</div></div>
+    <div class="card"><div class="label">Valor total pendente</div><div class="value">R$ 360.688,15</div></div>
+    <div class="card bad"><div class="label">Maior atraso</div><div class="value">61 dias</div></div>
+    <div class="card"><div class="label">Média de atraso</div><div class="value">10.2 dias</div></div>
+  </div>
+  <h3>⚠️ Notas com criticidade elevada (atrasadas)</h3>
+  <input class="filtro" data-target="tbl-notas" placeholder="Filtrar por filial, NF ou produto...">
+  <div class="table-wrap">
+  <table id="tbl-notas">
+    <thead><tr><th>Filial</th><th>Nota Fiscal</th><th>Descrição</th><th>Qtde</th><th>Dia da Entrega</th><th>Dias em Atraso</th></tr></thead>
+    <tbody>
+    <tr><td>VINHEDO</td><td>2618550</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>01/05/2026</td><td class='num'>61</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2620871</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>50</td><td>04/05/2026</td><td class='num'>58</td></tr>
+<tr><td>HORTOLANDIA</td><td>2635707</td><td>TV SAMSUNG 50 CRYSTAL UHD U8600F-PRETA</td><td class='num'>2</td><td>30/05/2026</td><td class='num'>32</td></tr>
+<tr><td>NOVA ODESSA</td><td>2634814</td><td>TV SAMSUNG 50 CRYSTAL UHD U8600F-PRETA</td><td class='num'>1</td><td>30/05/2026</td><td class='num'>32</td></tr>
+<tr><td>SÃO JOÃO DA BOA VISTA</td><td>2634831</td><td>TV SAMSUNG 50 CRYSTAL UHD U8600F-PRETA</td><td class='num'>2</td><td>30/05/2026</td><td class='num'>32</td></tr>
+<tr><td>VINHEDO</td><td>2635762</td><td>TV SAMSUNG 50 CRYSTAL UHD U8600F-PRETA</td><td class='num'>1</td><td>30/05/2026</td><td class='num'>32</td></tr>
+<tr><td>VINHEDO</td><td>2637707</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>01/06/2026</td><td class='num'>30</td></tr>
+<tr><td>ARARAS</td><td>2641012</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>09/06/2026</td><td class='num'>22</td></tr>
+<tr><td>NOVA ODESSA</td><td>2640998</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>50</td><td>09/06/2026</td><td class='num'>22</td></tr>
+<tr><td>PIRACICABA</td><td>2642664</td><td>SAMSUNG GALAXY A17 5G 128GB-PRETO</td><td class='num'>2</td><td>13/06/2026</td><td class='num'>18</td></tr>
+<tr><td>PIRACICABA</td><td>2642664</td><td>SAMSUNG GALAXY S25 FE 256GB-AZUL MARINHO</td><td class='num'>2</td><td>13/06/2026</td><td class='num'>18</td></tr>
+<tr><td>PIRACICABA</td><td>2642664</td><td>MOTOROLA EDGE 60 NEO 512GB-CINZA</td><td class='num'>2</td><td>13/06/2026</td><td class='num'>18</td></tr>
+<tr><td>PIRACICABA</td><td>2642664</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>6</td><td>13/06/2026</td><td class='num'>18</td></tr>
+<tr><td>ARARAS</td><td>2644600</td><td>SAMSUNG GALAXY A56 5G 256GB-CINZA</td><td class='num'>3</td><td>16/06/2026</td><td class='num'>15</td></tr>
+<tr><td>ARARAS</td><td>2644600</td><td>MOTOROLA MOTO G06 4G 128GB-AZUL MARINHO</td><td class='num'>2</td><td>16/06/2026</td><td class='num'>15</td></tr>
+<tr><td>ARARAS</td><td>2644600</td><td>SAMSUNG GALAXY A07 4G 128GB SP-PRETO</td><td class='num'>7</td><td>16/06/2026</td><td class='num'>15</td></tr>
+<tr><td>ARARAS</td><td>2644600</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>12</td><td>16/06/2026</td><td class='num'>15</td></tr>
+<tr><td>ARARAS</td><td>2644616</td><td>MOTOROLA MOTO G56 5G 256GB-GRAFITE</td><td class='num'>2</td><td>16/06/2026</td><td class='num'>15</td></tr>
+<tr><td>ARARAS</td><td>2644616</td><td>MOTOROLA MOTO G06 4G 128GB-AZUL MARINHO</td><td class='num'>2</td><td>16/06/2026</td><td class='num'>15</td></tr>
+<tr><td>ARARAS</td><td>2644616</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>4</td><td>16/06/2026</td><td class='num'>15</td></tr>
+<tr><td>PIRACICABA</td><td>2645757</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>20/06/2026</td><td class='num'>11</td></tr>
+<tr><td>VINHEDO</td><td>2646011</td><td>SAMSUNG GALAXY A17 5G 128GB-PRETO</td><td class='num'>2</td><td>21/06/2026</td><td class='num'>10</td></tr>
+<tr><td>VINHEDO</td><td>2646011</td><td>SAMSUNG GALAXY S25 FE 256GB-AZUL MARINHO</td><td class='num'>1</td><td>21/06/2026</td><td class='num'>10</td></tr>
+<tr><td>VINHEDO</td><td>2646011</td><td>MOTOROLA EDGE 60 NEO 512GB-CINZA</td><td class='num'>2</td><td>21/06/2026</td><td class='num'>10</td></tr>
+<tr><td>VINHEDO</td><td>2646011</td><td>MOTOROLA MOTO G67 5G 256GB-CHUMBO</td><td class='num'>5</td><td>21/06/2026</td><td class='num'>10</td></tr>
+<tr><td>VINHEDO</td><td>2646011</td><td>SAMSUNG GALAXY A57 5G 256GB-CINZA</td><td class='num'>7</td><td>21/06/2026</td><td class='num'>10</td></tr>
+<tr><td>VINHEDO</td><td>2646011</td><td>MOTOROLA MOTO G47 5G 128GB-GRAFITE</td><td class='num'>5</td><td>21/06/2026</td><td class='num'>10</td></tr>
+<tr><td>VINHEDO</td><td>2646011</td><td>MOTOROLA MOTO G MAX 5G 256GB-GRAFITE</td><td class='num'>2</td><td>21/06/2026</td><td class='num'>10</td></tr>
+<tr><td>VINHEDO</td><td>2646011</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>24</td><td>21/06/2026</td><td class='num'>10</td></tr>
+<tr><td>IGUATEMI</td><td>2646437</td><td>TIMCHIP PLANO E-SIM 4G HLR 311</td><td class='num'>70</td><td>22/06/2026</td><td class='num'>9</td></tr>
+<tr><td>IGUATEMI</td><td>2646437</td><td>TIMCHIP PLANO E-SIM 4G HLR 311</td><td class='num'>70</td><td>22/06/2026</td><td class='num'>9</td></tr>
+<tr><td>MOGI</td><td>2646458</td><td>TIMCHIP PLANO E-SIM 4G HLR 311</td><td class='num'>50</td><td>22/06/2026</td><td class='num'>9</td></tr>
+<tr><td>MOGI</td><td>2646458</td><td>TIMCHIP PLANO E-SIM 4G HLR 311</td><td class='num'>50</td><td>22/06/2026</td><td class='num'>9</td></tr>
+<tr><td>VINHEDO</td><td>2646466</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>50</td><td>22/06/2026</td><td class='num'>9</td></tr>
+<tr><td>VINHEDO</td><td>2646466</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>50</td><td>22/06/2026</td><td class='num'>9</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>APPLE IPHONE 15 256GB-PRETO NAC</td><td class='num'>4</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>APPLE IPHONE 15 256GB-AZUL NAC</td><td class='num'>2</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>SAMSUNG GALAXY S25 ULTRA 256GB-PRETO</td><td class='num'>4</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>SAMSUNG GALAXY S25 256GB-AZUL MARINHO</td><td class='num'>1</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>APPLE IPHONE 16E 256GB-PRETO NAC</td><td class='num'>1</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>SAMSUNG GALAXY S25 FE 256GB-AZUL MARINHO</td><td class='num'>4</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>SAMSUNG GALAXY S25 FE 256GB-PRETO</td><td class='num'>1</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>MOTOROLA EDGE 60 NEO 512GB-CINZA</td><td class='num'>11</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>APPLE IPHONE 17 256GB-PRETO</td><td class='num'>3</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>SAMSUNG GALAXY A07 4G 128GB SP-PRETO</td><td class='num'>7</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>MOTOROLA EDGE 70 512GB-GRAFITE</td><td class='num'>3</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>SAMSUNG GALAXY S26 256GB-BRANCO</td><td class='num'>1</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>MOTOROLA MOTO G67 5G 256GB-CHUMBO</td><td class='num'>6</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>SAMSUNG GALAXY S26 256GB-PRETO</td><td class='num'>1</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>SAMSUNG GALAXY S26 PLUS 256GB-PRETO</td><td class='num'>1</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>SAMSUNG GALAXY A57 5G 256GB-CINZA</td><td class='num'>12</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>MOTOROLA MOTO G47 5G 128GB-GRAFITE</td><td class='num'>1</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>63</td><td>26/06/2026</td><td class='num'>5</td></tr>
+<tr><td>LIMEIRA CENTRO</td><td>2650091</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>27/06/2026</td><td class='num'>4</td></tr>
+<tr><td>MOGI</td><td>2650089</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>27/06/2026</td><td class='num'>4</td></tr>
+<tr><td>MOGI</td><td>2650182</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>27/06/2026</td><td class='num'>4</td></tr>
+<tr><td>SÃO JOÃO DA BOA VISTA</td><td>2650206</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>27/06/2026</td><td class='num'>4</td></tr>
+<tr><td>VALINHOS</td><td>2650150</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>27/06/2026</td><td class='num'>4</td></tr>
+<tr><td>VINHEDO</td><td>2650158</td><td>TIMCHIP PLANO NAKED 4G</td><td class='num'>500</td><td>27/06/2026</td><td class='num'>4</td></tr>
+<tr><td>ARARAS</td><td>2652007</td><td>SAMSUNG GALAXY A07 5G 128GB-PRETO</td><td class='num'>4</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>ARARAS</td><td>2652007</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>4</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652041</td><td>MOTOROLA SIGNATURE 512GB-PRETO</td><td class='num'>1</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652041</td><td>SAMSUNG GALAXY S26 256GB-VIOLETA</td><td class='num'>1</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652041</td><td>SAMSUNG GALAXY S26 PLUS 256GB-PRETO</td><td class='num'>2</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652041</td><td>MOTOROLA MOTO G MAX 5G 256GB-GRAFITE</td><td class='num'>2</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652041</td><td>SAMSUNG GALAXY A07 5G 128GB-PRETO</td><td class='num'>2</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652041</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>8</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652056</td><td>SAMSUNG GALAXY S25 FE 256GB-PRETO</td><td class='num'>3</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652056</td><td>MOTOROLA EDGE 60 NEO 512GB-CINZA</td><td class='num'>3</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652056</td><td>MOTOROLA EDGE 70 512GB-GRAFITE</td><td class='num'>2</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652056</td><td>MOTOROLA MOTO G67 5G 256GB-CHUMBO</td><td class='num'>1</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652056</td><td>SAMSUNG GALAXY A07 5G 128GB-PRETO</td><td class='num'>4</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>BAURU SHOPPING</td><td>2652056</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>13</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>INDAIATUBA</td><td>2651850</td><td>MOTOROLA MOTO G MAX 5G 256GB-GRAFITE</td><td class='num'>2</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>INDAIATUBA</td><td>2651850</td><td>SAMSUNG GALAXY A07 5G 128GB-PRETO</td><td class='num'>2</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>INDAIATUBA</td><td>2651850</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>4</td><td>28/06/2026</td><td class='num'>3</td></tr>
+<tr><td>ARARAS</td><td>2652628</td><td>SAMSUNG GALAXY A37 5G 256GB-PRETO</td><td class='num'>5</td><td>29/06/2026</td><td class='num'>2</td></tr>
+<tr><td>ARARAS</td><td>2652628</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>5</td><td>29/06/2026</td><td class='num'>2</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2653464</td><td>MOTOROLA EDGE 60 NEO 512GB-LATTE</td><td class='num'>6</td><td>30/06/2026</td><td class='num'>1</td></tr>
+<tr><td>BAURU CALÇADÃO</td><td>2653464</td><td>TIMCHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>6</td><td>30/06/2026</td><td class='num'>1</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>🔄 Transferências Pendentes</h2>
+  <div class="cards">
+    <div class="card"><div class="label">Qtde total (unidades)</div><div class="value">300</div></div>
+    <div class="card ok"><div class="label">No prazo</div><div class="value">29</div></div>
+    <div class="card bad"><div class="label">Atrasados</div><div class="value">54</div></div>
+    <div class="card warn"><div class="label">Atenção</div><div class="value">43</div></div>
+    <div class="card bad"><div class="label">Crítico</div><div class="value">11</div></div>
+  </div>
+  <h3>⚠️ Transferências com criticidade elevada</h3>
+  <input class="filtro" data-target="tbl-transf" placeholder="Filtrar por filial, NF ou produto...">
+  <div class="table-wrap">
+  <table id="tbl-transf">
+    <thead><tr><th>Filial Origem</th><th>Dias fora do estoque</th><th>Filial Destino</th><th>Usuário Solicitante</th><th>NF</th><th>Produto</th><th>Descrição</th><th>Qtde</th></tr></thead>
+    <tbody>
+    <tr><td>ESTOQUE MATRIZ</td><td class='num'>55</td><td>VINHEDO CENTRO</td><td>GIOVANNI BROCHINI</td><td>NFe-005546</td><td>1200130033223</td><td>FONE JBL TUNE530 BT BLACK</td><td class='num'>1</td></tr>
+<tr><td>ESTOQUE MATRIZ</td><td class='num'>55</td><td>VINHEDO CENTRO</td><td>GIOVANNI BROCHINI</td><td>NFe-005546</td><td>195949121371-W</td><td>CARREGADOR USB-C DE 20W BRANCO APPLE</td><td class='num'>2</td></tr>
+<tr><td>ESTOQUE MATRIZ</td><td class='num'>55</td><td>VINHEDO CENTRO</td><td>GIOVANNI BROCHINI</td><td>NFe-005546</td><td>PB10K20WSG-10000</td><td>CARREGADOR PORTÁTIL 10.000MAH C/ CARREGAMENTO RÁPIDO CINZA ESPACIAL - GEONAV</td><td class='num'>1</td></tr>
+<tr><td>MARILIA CENTRO</td><td class='num'>51</td><td>LIMEIRA CENTRO</td><td>GIOVANNI BROCHINI</td><td>NFe-049211</td><td>TM04010934</td><td>TIM CHIP PLANO POS TRIPLO 4G HLR 311</td><td class='num'>2</td></tr>
+<tr><td>MARILIA CENTRO</td><td class='num'>51</td><td>LIMEIRA CENTRO</td><td>GIOVANNI BROCHINI</td><td>NFe-049211</td><td>TM04012847</td><td>TIM CHIP PLANO E-SIM 4G HLR 311</td><td class='num'>1</td></tr>
+<tr><td>JAU SHOPPING</td><td class='num'>46</td><td>CAMPINAS IGUATEMI</td><td>ANA CAROLINA BERNARDINELLI</td><td>NFe-051615</td><td>TM04017353</td><td>PS5 SLIM DIGITAL ASTRO BOT E GT7-BRANCO</td><td class='num'>1</td></tr>
+<tr><td>CAMPINAS IGUATEMI</td><td class='num'>40</td><td>CAMPINAS BANDEIRAS</td><td>BARBARA DEISY PEDREIRA DE JESUS</td><td>NFe-024177</td><td>TM04012847</td><td>TIM CHIP PLANO E-SIM 4G HLR 311</td><td class='num'>1</td></tr>
+<tr><td>RIO CLARO SHOPPING</td><td class='num'>35</td><td>ARARAS CENTRO</td><td>LARISSA FERNANDA SAMPAIO SIMONETTI</td><td>NFe-018993</td><td>TM04017365</td><td>SAMSUNG GALAXY A17 5G 128GB-PRETO</td><td class='num'>1</td></tr>
+<tr><td>BAURU CALCADAO</td><td class='num'>34</td><td>ESTOQUE MATRIZ</td><td>GIOVANNI BROCHINI</td><td>NFe-017950</td><td>190198914507-C</td><td>CABO DE C/C TRANCADO (1M) GENUINO - APPLE</td><td class='num'>20</td></tr>
+<tr><td>BAURU CALCADAO</td><td class='num'>34</td><td>ESTOQUE MATRIZ</td><td>GIOVANNI BROCHINI</td><td>NFe-017950</td><td>194252750858-L</td><td>CABO DE USB-C PARA LIGHTNING 1M APPLE</td><td class='num'>20</td></tr>
+<tr><td>BAURU CALCADAO</td><td class='num'>34</td><td>ESTOQUE MATRIZ</td><td>GIOVANNI BROCHINI</td><td>NFe-017950</td><td>195949121371-W</td><td>CARREGADOR USB-C DE 20W BRANCO APPLE</td><td class='num'>50</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+</main>
+<footer>Gerado automaticamente a partir das planilhas de controle · Rocha Telecom</footer>
+<script>
+document.querySelectorAll('input.filtro').forEach(function(inp) {
+  inp.addEventListener('input', function() {
+    var table = document.getElementById(inp.dataset.target);
+    var q = inp.value.toLowerCase();
+    table.querySelectorAll('tbody tr').forEach(function(tr) {
+      tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+});
+</script>
+</body>
+</html>
