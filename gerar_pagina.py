@@ -160,7 +160,7 @@ def linhas_transf():
     return "\n".join(out)
 
 
-html = f"""<!DOCTYPE html>
+html = rf"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -173,7 +173,15 @@ html = f"""<!DOCTYPE html>
     --ok: #22c55e; --warn: #f59e0b; --bad: #ef4444; --accent: #38bdf8; --border: #334155;
   }}
   * {{ box-sizing: border-box; }}
+  html {{ scroll-behavior: smooth; }}
   body {{ margin:0; font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); }}
+  .layout {{ display: flex; align-items: flex-start; }}
+  .sidebar {{ width: 220px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--card); border-right: 1px solid var(--border); padding: 20px 0; }}
+  .sidebar .brand {{ padding: 0 20px 16px; font-size: 14px; font-weight: 700; color: var(--text); border-bottom: 1px solid var(--border); margin-bottom: 8px; }}
+  .sidebar a {{ display: flex; align-items: center; gap: 8px; padding: 12px 20px; color: var(--muted); text-decoration: none; font-size: 14px; border-left: 3px solid transparent; }}
+  .sidebar a:hover {{ background: #22314f; color: var(--text); }}
+  .sidebar a.active {{ color: var(--accent); border-left-color: var(--accent); background: #16213a; font-weight: 600; }}
+  .content {{ flex: 1; min-width: 0; }}
   header {{ padding: 24px 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }}
   header h1 {{ margin: 0 0 4px; font-size: 22px; }}
   header p {{ margin: 0; color: var(--muted); font-size: 14px; }}
@@ -181,8 +189,16 @@ html = f"""<!DOCTYPE html>
   .badge-atualizacao .data {{ font-size: 15px; font-weight: 700; color: var(--accent); }}
   .badge-atualizacao .gerado {{ font-size: 11px; color: var(--muted); margin-top: 2px; }}
   main {{ padding: 24px 32px 64px; max-width: 1200px; margin: 0 auto; }}
-  section {{ margin-bottom: 40px; }}
+  section {{ margin-bottom: 40px; scroll-margin-top: 16px; }}
   section > h2 {{ font-size: 18px; border-left: 4px solid var(--accent); padding-left: 10px; margin-bottom: 16px; }}
+  @media (max-width: 860px) {{
+    .layout {{ display: block; }}
+    .sidebar {{ position: sticky; width: 100%; height: auto; display: flex; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 0; z-index: 10; }}
+    .sidebar .brand {{ display: none; }}
+    .sidebar a {{ white-space: nowrap; border-left: none; border-bottom: 3px solid transparent; padding: 14px 16px; }}
+    .sidebar a.active {{ border-left: none; border-bottom-color: var(--accent); }}
+    section {{ scroll-margin-top: 56px; }}
+  }}
   .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }}
   .card {{ background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }}
   .card .label {{ color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }}
@@ -194,6 +210,9 @@ html = f"""<!DOCTYPE html>
   table {{ width: 100%; border-collapse: collapse; background: var(--card2); border-radius: 10px; overflow: hidden; font-size: 13px; }}
   th, td {{ padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }}
   th {{ background: #0b1120; color: var(--muted); font-size: 11px; text-transform: uppercase; position: sticky; top: 0; }}
+  table.sortable th {{ cursor: pointer; user-select: none; }}
+  table.sortable th:hover {{ color: var(--text); }}
+  table.sortable th .sort-ind {{ color: var(--accent); }}
   td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
   tr:hover td {{ background: #22314f; }}
   .table-wrap {{ max-height: 480px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }}
@@ -207,6 +226,14 @@ html = f"""<!DOCTYPE html>
 </style>
 </head>
 <body>
+<div class="layout">
+<nav class="sidebar">
+  <div class="brand">📊 BI Operacional</div>
+  <a href="#pedidos" class="nav-link">📦 Pedidos</a>
+  <a href="#notas" class="nav-link">🧾 Notas Fiscais</a>
+  <a href="#transferencias" class="nav-link">🔄 Transferências</a>
+</nav>
+<div class="content">
 <header>
   <div>
     <h1>📊 BI Operacional — Pedidos, Notas Fiscais e Transferências</h1>
@@ -219,7 +246,7 @@ html = f"""<!DOCTYPE html>
 </header>
 <main>
 
-<section>
+<section id="pedidos">
   <h2>📦 Pedidos GN — Status Geral</h2>
   <div class="cards">
     <div class="card"><div class="label">Total de pedidos</div><div class="value">{pedidos['total']}</div></div>
@@ -236,7 +263,7 @@ html = f"""<!DOCTYPE html>
   </div>
 </section>
 
-<section>
+<section id="notas">
   <h2>🧾 Notas Fiscais Pendentes de Entrada</h2>
   <div class="cards">
     <div class="card"><div class="label">Total de notas</div><div class="value">{notas_resumo.get('Total de notas (linhas)', 0)}</div></div>
@@ -253,7 +280,7 @@ html = f"""<!DOCTYPE html>
   <h3>⚠️ Notas com criticidade elevada (atrasadas)</h3>
   <input class="filtro" data-target="tbl-notas" placeholder="Filtrar por filial, NF ou produto...">
   <div class="table-wrap">
-  <table id="tbl-notas">
+  <table id="tbl-notas" class="sortable">
     <thead><tr><th>Filial</th><th>Nota Fiscal</th><th>Descrição</th><th>Qtde</th><th>Dia da Entrega</th><th>Dias em Atraso</th></tr></thead>
     <tbody>
     {linhas_notas()}
@@ -262,7 +289,7 @@ html = f"""<!DOCTYPE html>
   </div>
 </section>
 
-<section>
+<section id="transferencias">
   <h2>🔄 Transferências Pendentes</h2>
   <div class="cards">
     <div class="card"><div class="label">Qtde total (unidades)</div><div class="value">{transf_resumo.get('Qtde total (unidades)', 0)}</div></div>
@@ -278,7 +305,7 @@ html = f"""<!DOCTYPE html>
   <h3>⚠️ Transferências com criticidade elevada</h3>
   <input class="filtro" data-target="tbl-transf" placeholder="Filtrar por filial, NF ou produto...">
   <div class="table-wrap">
-  <table id="tbl-transf">
+  <table id="tbl-transf" class="sortable">
     <thead><tr><th>Filial Origem</th><th>Dias fora do estoque</th><th>Filial Destino</th><th>Usuário Solicitante</th><th>NF</th><th>Produto</th><th>Descrição</th><th>Qtde</th></tr></thead>
     <tbody>
     {linhas_transf()}
@@ -289,6 +316,8 @@ html = f"""<!DOCTYPE html>
 
 </main>
 <footer>Gerado automaticamente a partir das planilhas de controle · Rocha Telecom</footer>
+</div>
+</div>
 <script>
 document.querySelectorAll('input.filtro').forEach(function(inp) {{
   inp.addEventListener('input', function() {{
@@ -299,6 +328,64 @@ document.querySelectorAll('input.filtro').forEach(function(inp) {{
     }});
   }});
 }});
+
+// ---- ordenacao das tabelas por coluna (clique no cabecalho) ----
+function parseCelula(texto) {{
+  texto = texto.trim();
+  var dataMatch = texto.match(/^(\d{{2}})\/(\d{{2}})\/(\d{{4}})$/);
+  if (dataMatch) return new Date(dataMatch[3], dataMatch[2] - 1, dataMatch[1]).getTime();
+  var limpo = texto.replace(/[^\d,.\-]/g, '');
+  if (limpo && /^-?\d{{1,3}}(\.\d{{3}})*(,\d+)?$|^-?\d+(,\d+)?$/.test(limpo)) {{
+    var n = parseFloat(limpo.replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(n)) return n;
+  }}
+  if (/^-?\d+(\.\d+)?$/.test(texto)) return parseFloat(texto);
+  return texto.toLowerCase();
+}}
+
+document.querySelectorAll('table.sortable').forEach(function(table) {{
+  var headers = table.querySelectorAll('thead th');
+  headers.forEach(function(th, idx) {{
+    th.addEventListener('click', function() {{
+      var dir = th.dataset.dir === 'asc' ? 'desc' : 'asc';
+      headers.forEach(function(h) {{
+        h.dataset.dir = '';
+        var ind = h.querySelector('.sort-ind');
+        if (ind) ind.remove();
+      }});
+      th.dataset.dir = dir;
+      var ind = document.createElement('span');
+      ind.className = 'sort-ind';
+      ind.textContent = dir === 'asc' ? ' ▲' : ' ▼';
+      th.appendChild(ind);
+
+      var tbody = table.querySelector('tbody');
+      var linhas = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+      linhas.sort(function(a, b) {{
+        var av = parseCelula(a.children[idx].textContent);
+        var bv = parseCelula(b.children[idx].textContent);
+        if (av < bv) return dir === 'asc' ? -1 : 1;
+        if (av > bv) return dir === 'asc' ? 1 : -1;
+        return 0;
+      }});
+      linhas.forEach(function(tr) {{ tbody.appendChild(tr); }});
+    }});
+  }});
+}});
+
+// ---- destaque do item ativo no menu lateral conforme a rolagem ----
+var navLinks = document.querySelectorAll('.sidebar .nav-link');
+var secoes = Array.prototype.slice.call(document.querySelectorAll('main section[id]'));
+function atualizarMenuAtivo() {{
+  var pos = window.scrollY + 100;
+  var atual = secoes[0];
+  secoes.forEach(function(s) {{ if (s.offsetTop <= pos) atual = s; }});
+  navLinks.forEach(function(a) {{
+    a.classList.toggle('active', atual && a.getAttribute('href') === '#' + atual.id);
+  }});
+}}
+window.addEventListener('scroll', atualizarMenuAtivo);
+atualizarMenuAtivo();
 
 const CHART_DATA = {chart_data_json};
 Chart.defaults.color = '#94a3b8';
