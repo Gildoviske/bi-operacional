@@ -135,6 +135,20 @@ chart_data = {
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
 
 # ----------------------------------------------------------------- HTML
+def linhas_pedidos_filiais():
+    out = []
+    for f in pedidos_filiais:
+        pct_entrega = f["entregue"] / f["total"] if f["total"] else 0
+        out.append(
+            "<tr><td>{fil}</td><td class='num'>{tot}</td><td class='num'>{ent}</td>"
+            "<td class='num'>{pen}</td><td class='num'>{atr}</td><td class='num'>{pct}</td></tr>".format(
+                fil=f["filial"], tot=f["total"], ent=f["entregue"], pen=f["pendente"],
+                atr=f["atrasado"], pct=pct(pct_entrega)
+            )
+        )
+    return "\n".join(out)
+
+
 def linhas_notas():
     out = []
     for r in notas_atrasadas:
@@ -260,6 +274,16 @@ html = rf"""<!DOCTYPE html>
     <div class="chart-box"><h4>Status geral dos pedidos</h4><div class="canvas-wrap"><canvas id="chart-pedidos-status"></canvas></div></div>
     <div class="chart-box"><h4>Entrada no sistema</h4><div class="canvas-wrap"><canvas id="chart-pedidos-entrada"></canvas></div></div>
     <div class="chart-box wide"><h4>Pedidos por filial (entregue / pendente / atrasado)</h4><div class="canvas-wrap"><canvas id="chart-pedidos-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Pedidos por filial</h3>
+  <input class="filtro" data-target="tbl-pedidos-filial" placeholder="Filtrar por filial...">
+  <div class="table-wrap">
+  <table id="tbl-pedidos-filial" class="sortable">
+    <thead><tr><th>Filial</th><th>Total</th><th>Entregue</th><th>Pendente</th><th>Atrasado</th><th>% Entregue</th></tr></thead>
+    <tbody>
+    {linhas_pedidos_filiais()}
+    </tbody>
+  </table>
   </div>
 </section>
 
