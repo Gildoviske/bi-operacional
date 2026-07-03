@@ -72,6 +72,10 @@ for r in rows:
         pedidos_filiais.append({"filial": nome, "total": r[2], "entregue": r[3], "pendente": r[4], "atrasado": r[5]})
 pedidos_filiais.sort(key=lambda f: (f["pendente"] + f["atrasado"]), reverse=True)
 
+# tabela detalhada de pedidos (igual a "TABELA DE PEDIDOS REALIZADOS NO GN" do BI)
+pedidos_detalhe = load("CONTROLE DE PEDIDOS.xlsx", "CONTROLE PEDIDOS")[1:]
+pedidos_detalhe.sort(key=lambda r: r[3] or datetime.min, reverse=True)
+
 # --------------------------------------------------------- NOTAS FISCAIS
 rows = load("CONTROLE NOTAS FISCAIS PENDENTES DE ENTRADA.xlsx", "NOTAS FISCAIS PENDENTES")
 data_rows = rows[1:]
@@ -135,6 +139,29 @@ chart_data = {
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
 
 # ----------------------------------------------------------------- HTML
+STATUS_CLASSE = {"ENTREGUE": "ok", "PENDENTE DE ENTRADA": "warn", "ATRASADO": "bad"}
+
+
+def epoch(dt):
+    return int(dt.timestamp() * 1000) if dt else 0
+
+
+pedidos_detalhe_data = []
+for r in pedidos_detalhe:
+    status = r[11] or ""
+    dias_num = r[12] if isinstance(r[12], (int, float)) else -1
+    pedidos_detalhe_data.append({
+        "dreal": data_str(r[3]), "dreal_ts": epoch(r[3]),
+        "dproc": data_str(r[4]), "dproc_ts": epoch(r[4]),
+        "dprev": data_str(r[8]), "dprev_ts": epoch(r[8]),
+        "fil": (r[1] or "").replace("ROCHA TELECOM - ", ""),
+        "ped": r[2], "qtd": r[6], "desc": r[5], "stprod": r[7] or "",
+        "dias": r[12] if isinstance(r[12], (int, float)) else (r[12] or "-"), "dias_num": dias_num,
+        "entrada": r[14] or "", "status": status, "cls": STATUS_CLASSE.get(status, ""),
+    })
+pedidos_detalhe_json = json.dumps(pedidos_detalhe_data, ensure_ascii=False)
+
+
 def linhas_pedidos_filiais():
     out = []
     for f in pedidos_filiais:
@@ -228,6 +255,13 @@ html = rf"""<!DOCTYPE html>
   table.sortable th:hover {{ color: var(--text); }}
   table.sortable th .sort-ind {{ color: var(--accent); }}
   td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+  .pill {{ display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }}
+  .pill.ok {{ background: rgba(34,197,94,.15); color: var(--ok); }}
+  .pill.warn {{ background: rgba(245,158,11,.15); color: var(--warn); }}
+  .pill.bad {{ background: rgba(239,68,68,.15); color: var(--bad); }}
+  .pager {{ display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }}
+  .pager button {{ background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 12px; cursor: pointer; }}
+  .pager button:disabled {{ opacity: .4; cursor: default; }}
   tr:hover td {{ background: #22314f; }}
   .table-wrap {{ max-height: 480px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }}
   .charts {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 20px; }}
@@ -285,6 +319,20 @@ html = rf"""<!DOCTYPE html>
     </tbody>
   </table>
   </div>
+
+  <h3>📋 Tabela de pedidos realizados no GN</h3>
+  <input class="filtro" id="filtro-pedidos-detalhe" placeholder="Filtrar por filial, pedido ou produto...">
+  <div class="table-wrap">
+  <table id="tbl-pedidos-detalhe">
+    <thead><tr>
+      <th data-col="dreal">Data Realização</th><th data-col="dproc">Data Processamento</th><th data-col="dprev">Data Prevista Entrega</th>
+      <th data-col="fil">Filial Destino</th><th data-col="ped">Nº Pedido GN</th><th data-col="qtd">Qtde</th><th data-col="desc">Descrição do Produto</th>
+      <th data-col="stprod">Status do Produto</th><th data-col="dias">Dias em Aberto</th><th data-col="entrada">Entrada no Sistema</th><th data-col="status">Status</th>
+    </tr></thead>
+    <tbody id="tbody-pedidos-detalhe"></tbody>
+  </table>
+  </div>
+  <div class="pager" id="pager-pedidos-detalhe"></div>
 </section>
 
 <section id="notas">
@@ -343,7 +391,7 @@ html = rf"""<!DOCTYPE html>
 </div>
 </div>
 <script>
-document.querySelectorAll('input.filtro').forEach(function(inp) {{
+document.querySelectorAll('input.filtro[data-target]').forEach(function(inp) {{
   inp.addEventListener('input', function() {{
     var table = document.getElementById(inp.dataset.target);
     var q = inp.value.toLowerCase();
@@ -410,6 +458,100 @@ function atualizarMenuAtivo() {{
 }}
 window.addEventListener('scroll', atualizarMenuAtivo);
 atualizarMenuAtivo();
+
+// ---- tabela de pedidos (paginada, com 2720 linhas nao da pra desenhar tudo de uma vez) ----
+(function() {{
+  var DADOS = {pedidos_detalhe_json};
+  var PAGE_SIZE = 50;
+  var estado = {{ filtro: '', sortCol: null, sortDir: 'asc', pagina: 1 }};
+
+  var COLS = {{
+    dreal: {{ sort: function(r) {{ return r.dreal_ts; }} }},
+    dproc: {{ sort: function(r) {{ return r.dproc_ts; }} }},
+    dprev: {{ sort: function(r) {{ return r.dprev_ts; }} }},
+    fil: {{ sort: function(r) {{ return r.fil.toLowerCase(); }} }},
+    ped: {{ sort: function(r) {{ return r.ped; }} }},
+    qtd: {{ sort: function(r) {{ return r.qtd; }} }},
+    desc: {{ sort: function(r) {{ return r.desc.toLowerCase(); }} }},
+    stprod: {{ sort: function(r) {{ return r.stprod.toLowerCase(); }} }},
+    dias: {{ sort: function(r) {{ return r.dias_num; }} }},
+    entrada: {{ sort: function(r) {{ return r.entrada.toLowerCase(); }} }},
+    status: {{ sort: function(r) {{ return r.status.toLowerCase(); }} }}
+  }};
+
+  function linhaHtml(r) {{
+    return '<tr><td>' + r.dreal + '</td><td>' + r.dproc + '</td><td>' + r.dprev + '</td>' +
+      '<td>' + r.fil + '</td><td class="num">' + r.ped + '</td><td class="num">' + r.qtd + '</td>' +
+      '<td>' + r.desc + '</td><td>' + r.stprod + '</td><td class="num">' + r.dias + '</td>' +
+      '<td>' + r.entrada + '</td><td><span class="pill ' + r.cls + '">' + r.status + '</span></td></tr>';
+  }}
+
+  function dadosFiltrados() {{
+    var q = estado.filtro.toLowerCase();
+    var out = !q ? DADOS.slice() : DADOS.filter(function(r) {{
+      return (r.fil + ' ' + r.ped + ' ' + r.desc + ' ' + r.status).toLowerCase().indexOf(q) !== -1;
+    }});
+    if (estado.sortCol) {{
+      var getVal = COLS[estado.sortCol].sort;
+      var dir = estado.sortDir === 'asc' ? 1 : -1;
+      out.sort(function(a, b) {{
+        var av = getVal(a), bv = getVal(b);
+        if (av < bv) return -1 * dir;
+        if (av > bv) return 1 * dir;
+        return 0;
+      }});
+    }}
+    return out;
+  }}
+
+  function render() {{
+    var filtrados = dadosFiltrados();
+    var totalPaginas = Math.max(1, Math.ceil(filtrados.length / PAGE_SIZE));
+    if (estado.pagina > totalPaginas) estado.pagina = totalPaginas;
+    var inicio = (estado.pagina - 1) * PAGE_SIZE;
+    var pagina = filtrados.slice(inicio, inicio + PAGE_SIZE);
+
+    document.getElementById('tbody-pedidos-detalhe').innerHTML = pagina.map(linhaHtml).join('');
+
+    var pager = document.getElementById('pager-pedidos-detalhe');
+    pager.innerHTML =
+      '<button id="pp-prev" ' + (estado.pagina <= 1 ? 'disabled' : '') + '>‹ Anterior</button>' +
+      '<span>Página ' + estado.pagina + ' de ' + totalPaginas + ' (' + filtrados.length + ' pedidos)</span>' +
+      '<button id="pp-next" ' + (estado.pagina >= totalPaginas ? 'disabled' : '') + '>Próxima ›</button>';
+    document.getElementById('pp-prev').addEventListener('click', function() {{ estado.pagina--; render(); }});
+    document.getElementById('pp-next').addEventListener('click', function() {{ estado.pagina++; render(); }});
+
+    document.querySelectorAll('#tbl-pedidos-detalhe thead th').forEach(function(th) {{
+      var ind = th.querySelector('.sort-ind');
+      if (ind) ind.remove();
+      if (th.dataset.col === estado.sortCol) {{
+        var span = document.createElement('span');
+        span.className = 'sort-ind';
+        span.textContent = estado.sortDir === 'asc' ? ' ▲' : ' ▼';
+        th.appendChild(span);
+      }}
+    }});
+  }}
+
+  document.getElementById('filtro-pedidos-detalhe').addEventListener('input', function(e) {{
+    estado.filtro = e.target.value;
+    estado.pagina = 1;
+    render();
+  }});
+
+  document.querySelectorAll('#tbl-pedidos-detalhe thead th').forEach(function(th) {{
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', function() {{
+      var col = th.dataset.col;
+      estado.sortDir = (estado.sortCol === col && estado.sortDir === 'asc') ? 'desc' : 'asc';
+      estado.sortCol = col;
+      estado.pagina = 1;
+      render();
+    }});
+  }});
+
+  render();
+}})();
 
 const CHART_DATA = {chart_data_json};
 Chart.defaults.color = '#94a3b8';
