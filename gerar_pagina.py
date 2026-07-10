@@ -270,6 +270,11 @@ html = rf"""<!DOCTYPE html>
   .chart-box .canvas-wrap {{ position: relative; height: calc(100% - 28px); }}
   .chart-box.wide {{ grid-column: 1 / -1; height: 720px; }}
   input.filtro {{ width: 100%; max-width: 320px; padding: 8px 10px; margin-bottom: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }}
+  .filtros-pedidos {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }}
+  .filtros-pedidos input.filtro {{ margin-bottom: 0; flex: 1 1 240px; }}
+  .filtros-pedidos select {{ padding: 8px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); flex: 1 1 170px; }}
+  .filtros-pedidos button {{ padding: 8px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; }}
+  .filtros-pedidos button:hover {{ color: var(--text); border-color: var(--accent); }}
   footer {{ text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }}
 </style>
 </head>
@@ -321,7 +326,23 @@ html = rf"""<!DOCTYPE html>
   </div>
 
   <h3>📋 Tabela de pedidos realizados no GN</h3>
-  <input class="filtro" id="filtro-pedidos-detalhe" placeholder="Filtrar por filial, pedido ou produto...">
+  <div class="filtros-pedidos">
+    <input class="filtro" id="filtro-pedidos-detalhe" placeholder="Buscar por filial, pedido ou produto...">
+    <select id="filtro-filial"><option value="">Todas as filiais</option></select>
+    <select id="filtro-status"><option value="">Todos os status</option></select>
+    <select id="filtro-stprod"><option value="">Todos os status do produto</option></select>
+    <select id="filtro-entrada"><option value="">Entrada no sistema (todos)</option></select>
+    <select id="filtro-dias">
+      <option value="">Dias em aberto (todos)</option>
+      <option value="np">Ainda não processado</option>
+      <option value="0-3">0-3 dias</option>
+      <option value="4-7">4-7 dias</option>
+      <option value="8-15">8-15 dias</option>
+      <option value="16-30">16-30 dias</option>
+      <option value="30+">30+ dias</option>
+    </select>
+    <button id="limpar-filtros-pedidos" type="button">Limpar filtros</button>
+  </div>
   <div class="table-wrap">
   <table id="tbl-pedidos-detalhe">
     <thead><tr>
@@ -463,7 +484,47 @@ atualizarMenuAtivo();
 (function() {{
   var DADOS = {pedidos_detalhe_json};
   var PAGE_SIZE = 50;
-  var estado = {{ filtro: '', sortCol: null, sortDir: 'asc', pagina: 1 }};
+  var estado = {{
+    filtro: '', sortCol: null, sortDir: 'asc', pagina: 1,
+    filial: '', status: '', stprod: '', entrada: '', dias: ''
+  }};
+
+  function valoresUnicos(campo) {{
+    var vistos = {{}};
+    var out = [];
+    DADOS.forEach(function(r) {{
+      var v = r[campo];
+      if (v && !vistos[v]) {{ vistos[v] = true; out.push(v); }}
+    }});
+    out.sort();
+    return out;
+  }}
+
+  function popularSelect(id, valores) {{
+    var sel = document.getElementById(id);
+    valores.forEach(function(v) {{
+      var opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      sel.appendChild(opt);
+    }});
+  }}
+  popularSelect('filtro-filial', valoresUnicos('fil'));
+  popularSelect('filtro-status', valoresUnicos('status'));
+  popularSelect('filtro-stprod', valoresUnicos('stprod'));
+  popularSelect('filtro-entrada', valoresUnicos('entrada'));
+
+  function diasNaFaixa(dias, faixa) {{
+    if (!faixa) return true;
+    if (dias < 0) return faixa === 'np';
+    if (faixa === 'np') return false;
+    if (faixa === '0-3') return dias <= 3;
+    if (faixa === '4-7') return dias >= 4 && dias <= 7;
+    if (faixa === '8-15') return dias >= 8 && dias <= 15;
+    if (faixa === '16-30') return dias >= 16 && dias <= 30;
+    if (faixa === '30+') return dias > 30;
+    return true;
+  }}
 
   var COLS = {{
     dreal: {{ sort: function(r) {{ return r.dreal_ts; }} }},
@@ -488,8 +549,14 @@ atualizarMenuAtivo();
 
   function dadosFiltrados() {{
     var q = estado.filtro.toLowerCase();
-    var out = !q ? DADOS.slice() : DADOS.filter(function(r) {{
-      return (r.fil + ' ' + r.ped + ' ' + r.desc + ' ' + r.status).toLowerCase().indexOf(q) !== -1;
+    var out = DADOS.filter(function(r) {{
+      if (q && (r.fil + ' ' + r.ped + ' ' + r.desc + ' ' + r.status).toLowerCase().indexOf(q) === -1) return false;
+      if (estado.filial && r.fil !== estado.filial) return false;
+      if (estado.status && r.status !== estado.status) return false;
+      if (estado.stprod && r.stprod !== estado.stprod) return false;
+      if (estado.entrada && r.entrada !== estado.entrada) return false;
+      if (estado.dias && !diasNaFaixa(r.dias_num, estado.dias)) return false;
+      return true;
     }});
     if (estado.sortCol) {{
       var getVal = COLS[estado.sortCol].sort;
@@ -536,6 +603,27 @@ atualizarMenuAtivo();
   document.getElementById('filtro-pedidos-detalhe').addEventListener('input', function(e) {{
     estado.filtro = e.target.value;
     estado.pagina = 1;
+    render();
+  }});
+
+  [
+    ['filtro-filial', 'filial'], ['filtro-status', 'status'], ['filtro-stprod', 'stprod'],
+    ['filtro-entrada', 'entrada'], ['filtro-dias', 'dias']
+  ].forEach(function(par) {{
+    document.getElementById(par[0]).addEventListener('change', function(e) {{
+      estado[par[1]] = e.target.value;
+      estado.pagina = 1;
+      render();
+    }});
+  }});
+
+  document.getElementById('limpar-filtros-pedidos').addEventListener('click', function() {{
+    estado.filtro = estado.filial = estado.status = estado.stprod = estado.entrada = estado.dias = '';
+    estado.pagina = 1;
+    document.getElementById('filtro-pedidos-detalhe').value = '';
+    ['filtro-filial', 'filtro-status', 'filtro-stprod', 'filtro-entrada', 'filtro-dias'].forEach(function(id) {{
+      document.getElementById(id).value = '';
+    }});
     render();
   }});
 
