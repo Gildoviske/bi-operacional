@@ -72,6 +72,17 @@
   .filtros-pedidos select { padding: 8px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); flex: 1 1 170px; }
   .filtros-pedidos button { padding: 8px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; }
   .filtros-pedidos button:hover { color: var(--text); border-color: var(--accent); }
+  .msel { position: relative; flex: 1 1 170px; }
+  .msel-btn { width: 100%; text-align: left; padding: 8px 26px 8px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer; position: relative; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msel-btn:after { content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .msel.open .msel-btn { border-color: var(--accent); }
+  .msel-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; min-width: 240px; max-height: 280px; overflow-y: auto; background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 8px; z-index: 30; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .msel.open .msel-panel { display: block; }
+  .msel-actions { display: flex; gap: 8px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .msel-actions button { font-size: 11px; background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+  .msel-actions button:hover { color: var(--text); }
+  .msel-options label { display: flex; align-items: center; gap: 7px; padding: 5px 4px; font-size: 13px; cursor: pointer; border-radius: 4px; }
+  .msel-options label:hover { background: #22314f; }
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }
 </style>
 </head>
@@ -91,7 +102,7 @@
   </div>
   <div class="badge-atualizacao">
     <div class="data">🕒 Atualizado em 08/07/2026</div>
-    <div class="gerado">Página gerada em 10/07/2026 13:41</div>
+    <div class="gerado">Página gerada em 10/07/2026 13:46</div>
   </div>
 </header>
 <main>
@@ -149,19 +160,11 @@
   <h3>📋 Tabela de pedidos realizados no GN</h3>
   <div class="filtros-pedidos">
     <input class="filtro" id="filtro-pedidos-detalhe" placeholder="Buscar por filial, pedido ou produto...">
-    <select id="filtro-filial"><option value="">Todas as filiais</option></select>
-    <select id="filtro-status"><option value="">Todos os status</option></select>
-    <select id="filtro-stprod"><option value="">Todos os status do produto</option></select>
-    <select id="filtro-entrada"><option value="">Entrada no sistema (todos)</option></select>
-    <select id="filtro-dias">
-      <option value="">Dias em aberto (todos)</option>
-      <option value="np">Ainda não processado</option>
-      <option value="0-3">0-3 dias</option>
-      <option value="4-7">4-7 dias</option>
-      <option value="8-15">8-15 dias</option>
-      <option value="16-30">16-30 dias</option>
-      <option value="30+">30+ dias</option>
-    </select>
+    <div class="msel" id="msel-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-status"><button type="button" class="msel-btn" data-default="Todos os status">Todos os status</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-stprod"><button type="button" class="msel-btn" data-default="Status do produto (todos)">Status do produto (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-entrada"><button type="button" class="msel-btn" data-default="Entrada no sistema (todos)">Entrada no sistema (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-dias"><button type="button" class="msel-btn" data-default="Dias em aberto (todos)">Dias em aberto (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <button id="limpar-filtros-pedidos" type="button">Limpar filtros</button>
   </div>
   <div class="table-wrap">
@@ -380,7 +383,7 @@ atualizarMenuAtivo();
   var PAGE_SIZE = 50;
   var estado = {
     filtro: '', sortCol: null, sortDir: 'asc', pagina: 1,
-    filial: '', status: '', stprod: '', entrada: '', dias: ''
+    filial: new Set(), status: new Set(), stprod: new Set(), entrada: new Set(), dias: new Set()
   };
 
   function valoresUnicos(campo) {
@@ -394,22 +397,12 @@ atualizarMenuAtivo();
     return out;
   }
 
-  function popularSelect(id, valores) {
-    var sel = document.getElementById(id);
-    valores.forEach(function(v) {
-      var opt = document.createElement('option');
-      opt.value = v;
-      opt.textContent = v;
-      sel.appendChild(opt);
-    });
-  }
-  popularSelect('filtro-filial', valoresUnicos('fil'));
-  popularSelect('filtro-status', valoresUnicos('status'));
-  popularSelect('filtro-stprod', valoresUnicos('stprod'));
-  popularSelect('filtro-entrada', valoresUnicos('entrada'));
+  var FAIXAS_DIAS = [
+    ['np', 'Ainda não processado'], ['0-3', '0-3 dias'], ['4-7', '4-7 dias'],
+    ['8-15', '8-15 dias'], ['16-30', '16-30 dias'], ['30+', '30+ dias']
+  ];
 
   function diasNaFaixa(dias, faixa) {
-    if (!faixa) return true;
     if (dias < 0) return faixa === 'np';
     if (faixa === 'np') return false;
     if (faixa === '0-3') return dias <= 3;
@@ -419,6 +412,69 @@ atualizarMenuAtivo();
     if (faixa === '30+') return dias > 30;
     return true;
   }
+
+  // ---- componente de multi-selecao (checkbox dropdown) ----
+  function criarMultiSelect(id, pares, campoEstado, onChange) {
+    var raiz = document.getElementById('msel-' + id);
+    var btn = raiz.querySelector('.msel-btn');
+    var painel = raiz.querySelector('.msel-panel');
+    var opcoes = raiz.querySelector('.msel-options');
+    var set = estado[campoEstado];
+    painel.addEventListener('click', function(e) { e.stopPropagation(); });
+
+    pares.forEach(function(par) {
+      var label = document.createElement('label');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = par[0];
+      cb.addEventListener('change', function() {
+        if (cb.checked) set.add(par[0]); else set.delete(par[0]);
+        atualizarLabel();
+        onChange();
+      });
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(par[1]));
+      opcoes.appendChild(label);
+    });
+
+    function atualizarLabel() {
+      var padrao = btn.dataset.default;
+      if (set.size === 0) btn.textContent = padrao;
+      else if (set.size === 1) btn.textContent = pares.filter(function(p) { return set.has(p[0]); })[0][1];
+      else btn.textContent = set.size + ' selecionadas';
+    }
+
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var jaAberto = raiz.classList.contains('open');
+      document.querySelectorAll('.msel.open').forEach(function(m) { m.classList.remove('open'); });
+      if (!jaAberto) raiz.classList.add('open');
+    });
+
+    raiz.querySelector('[data-act="all"]').addEventListener('click', function() {
+      opcoes.querySelectorAll('input').forEach(function(cb) { cb.checked = true; set.add(cb.value); });
+      atualizarLabel();
+      onChange();
+    });
+    raiz.querySelector('[data-act="none"]').addEventListener('click', function() {
+      opcoes.querySelectorAll('input').forEach(function(cb) { cb.checked = false; });
+      set.clear();
+      atualizarLabel();
+      onChange();
+    });
+
+    return {
+      limpar: function() {
+        set.clear();
+        opcoes.querySelectorAll('input').forEach(function(cb) { cb.checked = false; });
+        atualizarLabel();
+      }
+    };
+  }
+
+  document.addEventListener('click', function() {
+    document.querySelectorAll('.msel.open').forEach(function(m) { m.classList.remove('open'); });
+  });
 
   var COLS = {
     dreal: { sort: function(r) { return r.dreal_ts; } },
@@ -445,11 +501,15 @@ atualizarMenuAtivo();
     var q = estado.filtro.toLowerCase();
     var out = DADOS.filter(function(r) {
       if (q && (r.fil + ' ' + r.ped + ' ' + r.desc + ' ' + r.status).toLowerCase().indexOf(q) === -1) return false;
-      if (estado.filial && r.fil !== estado.filial) return false;
-      if (estado.status && r.status !== estado.status) return false;
-      if (estado.stprod && r.stprod !== estado.stprod) return false;
-      if (estado.entrada && r.entrada !== estado.entrada) return false;
-      if (estado.dias && !diasNaFaixa(r.dias_num, estado.dias)) return false;
+      if (estado.filial.size && !estado.filial.has(r.fil)) return false;
+      if (estado.status.size && !estado.status.has(r.status)) return false;
+      if (estado.stprod.size && !estado.stprod.has(r.stprod)) return false;
+      if (estado.entrada.size && !estado.entrada.has(r.entrada)) return false;
+      if (estado.dias.size) {
+        var algumaFaixaBate = false;
+        estado.dias.forEach(function(faixa) { if (diasNaFaixa(r.dias_num, faixa)) algumaFaixaBate = true; });
+        if (!algumaFaixaBate) return false;
+      }
       return true;
     });
     if (estado.sortCol) {
@@ -500,24 +560,22 @@ atualizarMenuAtivo();
     render();
   });
 
-  [
-    ['filtro-filial', 'filial'], ['filtro-status', 'status'], ['filtro-stprod', 'stprod'],
-    ['filtro-entrada', 'entrada'], ['filtro-dias', 'dias']
-  ].forEach(function(par) {
-    document.getElementById(par[0]).addEventListener('change', function(e) {
-      estado[par[1]] = e.target.value;
-      estado.pagina = 1;
-      render();
-    });
-  });
+  function aoMudarFiltro() {
+    estado.pagina = 1;
+    render();
+  }
+
+  var mselFilial = criarMultiSelect('filial', valoresUnicos('fil').map(function(v) { return [v, v]; }), 'filial', aoMudarFiltro);
+  var mselStatus = criarMultiSelect('status', valoresUnicos('status').map(function(v) { return [v, v]; }), 'status', aoMudarFiltro);
+  var mselStprod = criarMultiSelect('stprod', valoresUnicos('stprod').map(function(v) { return [v, v]; }), 'stprod', aoMudarFiltro);
+  var mselEntrada = criarMultiSelect('entrada', valoresUnicos('entrada').map(function(v) { return [v, v]; }), 'entrada', aoMudarFiltro);
+  var mselDias = criarMultiSelect('dias', FAIXAS_DIAS, 'dias', aoMudarFiltro);
 
   document.getElementById('limpar-filtros-pedidos').addEventListener('click', function() {
-    estado.filtro = estado.filial = estado.status = estado.stprod = estado.entrada = estado.dias = '';
+    estado.filtro = '';
     estado.pagina = 1;
     document.getElementById('filtro-pedidos-detalhe').value = '';
-    ['filtro-filial', 'filtro-status', 'filtro-stprod', 'filtro-entrada', 'filtro-dias'].forEach(function(id) {
-      document.getElementById(id).value = '';
-    });
+    [mselFilial, mselStatus, mselStprod, mselEntrada, mselDias].forEach(function(m) { m.limpar(); });
     render();
   });
 
