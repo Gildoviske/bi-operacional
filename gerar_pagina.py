@@ -9,6 +9,17 @@ import json
 import openpyxl
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
+
+FAVICON_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>"
+    "<rect width='64' height='64' rx='14' fill='#0f172a'/>"
+    "<rect x='13' y='34' width='10' height='18' rx='2' fill='#38bdf8'/>"
+    "<rect x='27' y='22' width='10' height='30' rx='2' fill='#22c55e'/>"
+    "<rect x='41' y='12' width='10' height='40' rx='2' fill='#f59e0b'/>"
+    "</svg>"
+)
+FAVICON_HREF = "data:image/svg+xml," + quote(FAVICON_SVG)
 
 BASE = Path(r"I:\Meu Drive\CONTROLE COMPRAS")
 OUT = Path(__file__).resolve().parent / "index.html"
@@ -207,6 +218,7 @@ html = rf"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BI Operacional — Rocha Telecom</title>
+<link rel="icon" type="image/svg+xml" href="{FAVICON_HREF}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root {{
