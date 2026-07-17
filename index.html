@@ -94,6 +94,7 @@
   <a href="#pedidos" class="nav-link">📦 Pedidos</a>
   <a href="#notas" class="nav-link">🧾 Notas Fiscais</a>
   <a href="#transferencias" class="nav-link">🔄 Transferências</a>
+  <a href="#amet" class="nav-link">🛡️ Películas AMET</a>
 </nav>
 <div class="content">
 <header>
@@ -103,7 +104,7 @@
   </div>
   <div class="badge-atualizacao">
     <div class="data">🕒 Atualizado em 15/07/2026</div>
-    <div class="gerado">Página gerada em 17/07/2026 11:52</div>
+    <div class="gerado">Página gerada em 17/07/2026 12:42</div>
   </div>
 </header>
 <main>
@@ -333,6 +334,54 @@
   </table>
   </div>
   <div class="pager" id="contador-transf"></div>
+</section>
+
+<section id="amet">
+  <h2>🛡️ Películas AMET por Filial</h2>
+  <p style="color:var(--muted); font-size:13px; margin:-8px 0 16px;">Estoque atualizado em 17/06/2026 · Vendas de 17/06/2026 ATÉ O DIA  17/07/2026</p>
+  <div class="cards">
+    <div class="card"><div class="label">Estoque total (peças)</div><div class="value">1686</div></div>
+    <div class="card ok"><div class="label">Vendido no período (peças)</div><div class="value">692</div></div>
+    <div class="card"><div class="label">Filiais monitoradas</div><div class="value">26</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box wide"><h4>Estoque x Vendido por filial</h4><div class="canvas-wrap"><canvas id="chart-amet-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Estoque e vendas por filial</h3>
+  <input class="filtro" data-target="tbl-amet" placeholder="Filtrar por filial...">
+  <div class="table-wrap">
+  <table id="tbl-amet" class="sortable">
+    <thead><tr><th>Filial</th><th>Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
+    <tbody>
+    <tr><td>PIRACICABA CENTRO</td><td class='num'>87</td><td class='num'>66</td><td class='num'>75,9%</td></tr>
+<tr><td>CAMPINAS 13 DE MAIO</td><td class='num'>6</td><td class='num'>61</td><td class='num'>1016,7%</td></tr>
+<tr><td>BAURU CALCADAO</td><td class='num'>22</td><td class='num'>56</td><td class='num'>254,5%</td></tr>
+<tr><td>SANTA BARBARA TIVOLI</td><td class='num'>59</td><td class='num'>54</td><td class='num'>91,5%</td></tr>
+<tr><td>SUMARE CENTRO</td><td class='num'>28</td><td class='num'>49</td><td class='num'>175,0%</td></tr>
+<tr><td>LIMEIRA CENTRO</td><td class='num'>26</td><td class='num'>42</td><td class='num'>161,5%</td></tr>
+<tr><td>LIMEIRA SHOPPING</td><td class='num'>30</td><td class='num'>42</td><td class='num'>140,0%</td></tr>
+<tr><td>AMERICANA CENTRO</td><td class='num'>50</td><td class='num'>38</td><td class='num'>76,0%</td></tr>
+<tr><td>CAMPINAS IGUATEMI</td><td class='num'>25</td><td class='num'>37</td><td class='num'>148,0%</td></tr>
+<tr><td>SÃO JOÃO DA BOA VISTA</td><td class='num'>58</td><td class='num'>34</td><td class='num'>58,6%</td></tr>
+<tr><td>PAULINIA CENTRO</td><td class='num'>74</td><td class='num'>25</td><td class='num'>33,8%</td></tr>
+<tr><td>INDAIATUBA POLO SHOPPING</td><td class='num'>28</td><td class='num'>24</td><td class='num'>85,7%</td></tr>
+<tr><td>CAMPINAS BANDEIRAS</td><td class='num'>51</td><td class='num'>20</td><td class='num'>39,2%</td></tr>
+<tr><td>MARILIA CENTRO</td><td class='num'>107</td><td class='num'>20</td><td class='num'>18,7%</td></tr>
+<tr><td>RIO CLARO SHOPPING</td><td class='num'>20</td><td class='num'>19</td><td class='num'>95,0%</td></tr>
+<tr><td>SOROCABA SHOPPING CIANE</td><td class='num'>51</td><td class='num'>19</td><td class='num'>37,3%</td></tr>
+<tr><td>BAURU SHOPPING</td><td class='num'>7</td><td class='num'>17</td><td class='num'>242,9%</td></tr>
+<tr><td>MOGI BURITI</td><td class='num'>60</td><td class='num'>16</td><td class='num'>26,7%</td></tr>
+<tr><td>VINHEDO CENTRO</td><td class='num'>137</td><td class='num'>15</td><td class='num'>10,9%</td></tr>
+<tr><td>VALINHOS SHOPPING</td><td class='num'>56</td><td class='num'>14</td><td class='num'>25,0%</td></tr>
+<tr><td>HORTOLANDIA SHOPPING</td><td class='num'>57</td><td class='num'>11</td><td class='num'>19,3%</td></tr>
+<tr><td>ARARAS CENTRO</td><td class='num'>89</td><td class='num'>9</td><td class='num'>10,1%</td></tr>
+<tr><td>NOVA ODESSA CENTRO</td><td class='num'>49</td><td class='num'>3</td><td class='num'>6,1%</td></tr>
+<tr><td>LORENA CENTRO</td><td class='num'>0</td><td class='num'>1</td><td class='num'>-</td></tr>
+<tr><td>ESTOQUE MATRIZ</td><td class='num'>507</td><td class='num'>0</td><td class='num'>0,0%</td></tr>
+<tr><td>JAU SHOPPING</td><td class='num'>2</td><td class='num'>0</td><td class='num'>0,0%</td></tr>
+    </tbody>
+  </table>
+  </div>
 </section>
 
 </main>
@@ -731,7 +780,7 @@ document.addEventListener('click', function() {
   render();
 })();
 
-const CHART_DATA = {"pedidosStatus": {"labels": ["Entregue", "Pendente de entrada", "Atrasado"], "values": [1446, 559, 152]}, "pedidosEntrada": {"labels": ["Entrada realizada", "Entrada pendente"], "values": [1382, 775]}, "pedidosFilial": {"labels": ["BAURU CALÇADÃO", "SHOPPING BANDEIRAS", "SHOPPING RIO CLARO", "LIMEIRA CENTRO", "SHOPPING TIVOLI", "SUMARÉ", "JAÚ SHOPPING", "SHOPPING POLO", "SHOPPING IGUATEMI", "SHOPPING PATIO CIANÊ", "PÁTIO LIMEIRA", "SHOPPING HORTOLANDIA", "VALINHOS", "PIRACICABA CENTRO", "MOGI BURITI", "SÃO JOÃO DA BOA VISTA", "BAURU SHOPPING", "CAMPINAS 13 DE MAIO", "AMERICANA", "PAULINIA CENTRO", "MARÍLIA", "NOVA ODESSA", "VINHEDO CENTRO", "ARARAS CENTRO", "ESCRITÓRIO"], "entregue": [169, 65, 63, 45, 68, 44, 84, 59, 60, 46, 71, 47, 42, 44, 39, 37, 63, 53, 45, 45, 37, 39, 33, 36, 0], "pendente": [71, 28, 26, 28, 21, 24, 20, 19, 21, 22, 21, 19, 19, 20, 19, 22, 17, 17, 17, 17, 14, 13, 11, 11, 0], "atrasado": [10, 9, 7, 3, 7, 4, 7, 8, 6, 4, 5, 7, 7, 5, 5, 2, 6, 5, 4, 4, 4, 4, 4, 2, 0]}, "notasStatus": {"labels": ["Atrasadas", "Aguardando (no prazo)"], "values": [93, 0]}, "transfStatus": {"labels": ["No prazo", "Atenção", "Crítico"], "values": [318, 18, 6]}, "transfPrazo": {"labels": ["0-3 dias", "4-7 dias", "8-15 dias", "16-30 dias", "30+ dias"], "values": [318, 3, 9, 6, 6]}};
+const CHART_DATA = {"pedidosStatus": {"labels": ["Entregue", "Pendente de entrada", "Atrasado"], "values": [1446, 559, 152]}, "pedidosEntrada": {"labels": ["Entrada realizada", "Entrada pendente"], "values": [1382, 775]}, "pedidosFilial": {"labels": ["BAURU CALÇADÃO", "SHOPPING BANDEIRAS", "SHOPPING RIO CLARO", "LIMEIRA CENTRO", "SHOPPING TIVOLI", "SUMARÉ", "JAÚ SHOPPING", "SHOPPING POLO", "SHOPPING IGUATEMI", "SHOPPING PATIO CIANÊ", "PÁTIO LIMEIRA", "SHOPPING HORTOLANDIA", "VALINHOS", "PIRACICABA CENTRO", "MOGI BURITI", "SÃO JOÃO DA BOA VISTA", "BAURU SHOPPING", "CAMPINAS 13 DE MAIO", "AMERICANA", "PAULINIA CENTRO", "MARÍLIA", "NOVA ODESSA", "VINHEDO CENTRO", "ARARAS CENTRO", "ESCRITÓRIO"], "entregue": [169, 65, 63, 45, 68, 44, 84, 59, 60, 46, 71, 47, 42, 44, 39, 37, 63, 53, 45, 45, 37, 39, 33, 36, 0], "pendente": [71, 28, 26, 28, 21, 24, 20, 19, 21, 22, 21, 19, 19, 20, 19, 22, 17, 17, 17, 17, 14, 13, 11, 11, 0], "atrasado": [10, 9, 7, 3, 7, 4, 7, 8, 6, 4, 5, 7, 7, 5, 5, 2, 6, 5, 4, 4, 4, 4, 4, 2, 0]}, "notasStatus": {"labels": ["Atrasadas", "Aguardando (no prazo)"], "values": [93, 0]}, "transfStatus": {"labels": ["No prazo", "Atenção", "Crítico"], "values": [318, 18, 6]}, "transfPrazo": {"labels": ["0-3 dias", "4-7 dias", "8-15 dias", "16-30 dias", "30+ dias"], "values": [318, 3, 9, 6, 6]}, "amet": {"labels": ["PIRACICABA CENTRO", "CAMPINAS 13 DE MAIO", "BAURU CALCADAO", "SANTA BARBARA TIVOLI", "SUMARE CENTRO", "LIMEIRA CENTRO", "LIMEIRA SHOPPING", "AMERICANA CENTRO", "CAMPINAS IGUATEMI", "SÃO JOÃO DA BOA VISTA", "PAULINIA CENTRO", "INDAIATUBA POLO SHOPPING", "CAMPINAS BANDEIRAS", "MARILIA CENTRO", "RIO CLARO SHOPPING", "SOROCABA SHOPPING CIANE", "BAURU SHOPPING", "MOGI BURITI", "VINHEDO CENTRO", "VALINHOS SHOPPING", "HORTOLANDIA SHOPPING", "ARARAS CENTRO", "NOVA ODESSA CENTRO", "LORENA CENTRO", "ESTOQUE MATRIZ", "JAU SHOPPING"], "estoque": [87, 6, 22, 59, 28, 26, 30, 50, 25, 58, 74, 28, 51, 107, 20, 51, 7, 60, 137, 56, 57, 89, 49, 0, 507, 2], "vendido": [66, 61, 56, 54, 49, 42, 42, 38, 37, 34, 25, 24, 20, 20, 19, 19, 17, 16, 15, 14, 11, 9, 3, 1, 0, 0]}};
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.borderColor = '#334155';
 const COR_OK = '#22c55e', COR_WARN = '#f59e0b', COR_BAD = '#ef4444', COR_ACCENT = '#38bdf8';
@@ -798,6 +847,23 @@ new Chart(document.getElementById('chart-transf-prazo'), {
     datasets: [{ label: 'Transferências', data: CHART_DATA.transfPrazo.values, backgroundColor: COR_ACCENT }]
   },
   options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+});
+
+new Chart(document.getElementById('chart-amet-filial'), {
+  type: 'bar',
+  data: {
+    labels: CHART_DATA.amet.labels,
+    datasets: [
+      { label: 'Estoque', data: CHART_DATA.amet.estoque, backgroundColor: COR_ACCENT },
+      { label: 'Vendido', data: CHART_DATA.amet.vendido, backgroundColor: COR_OK }
+    ]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom' } }
+  }
 });
 </script>
 </body>

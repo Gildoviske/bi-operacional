@@ -115,6 +115,48 @@ transf_criticas = [r for r in data_rows if r[11] == "CRÍTICO"]
 transf_todas = [r for r in data_rows if r[0] is not None]
 transf_todas.sort(key=lambda r: (r[2] or 0), reverse=True)
 
+# ------------------------------------------------------------- AMET
+rows = load("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx", "AMET NAS FILIAIS")
+
+amet_data_estoque = (rows[0][0] or "").split("ATUALIZADO DIA ")[-1].rstrip(")")
+amet_periodo_vendas = (rows[0][8] or "").split("(DO DIA ")[-1].rstrip(")")
+
+amet_estoque_por_filial = {}
+capturando = False
+for r in rows:
+    if r[0] == "Filial":
+        capturando = True
+        continue
+    if capturando:
+        if r[0] is None:
+            continue
+        if r[0] == "Total Geral":
+            break
+        amet_estoque_por_filial[r[0]] = r[6] or 0
+
+amet_vendido_por_filial = {}
+capturando = False
+for r in rows:
+    if r[8] == "Filial":
+        capturando = True
+        continue
+    if capturando:
+        if r[8] is None:
+            continue
+        if r[8] == "Total Geral":
+            break
+        amet_vendido_por_filial[r[8]] = r[13] or 0
+
+amet_filiais = []
+for nome in sorted(set(amet_estoque_por_filial) | set(amet_vendido_por_filial)):
+    estoque = amet_estoque_por_filial.get(nome, 0)
+    vendido = amet_vendido_por_filial.get(nome, 0)
+    amet_filiais.append({"filial": nome, "estoque": estoque, "vendido": vendido})
+amet_filiais.sort(key=lambda f: f["vendido"], reverse=True)
+
+amet_estoque_total = sum(amet_estoque_por_filial.values())
+amet_vendido_total = sum(amet_vendido_por_filial.values())
+
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
 chart_data = {
@@ -147,6 +189,11 @@ chart_data = {
             transf_resumo.get("8-15 dias", 0), transf_resumo.get("16-30 dias", 0),
             transf_resumo.get("30+ dias", 0),
         ],
+    },
+    "amet": {
+        "labels": [f["filial"] for f in amet_filiais],
+        "estoque": [f["estoque"] for f in amet_filiais],
+        "vendido": [f["vendido"] for f in amet_filiais],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -213,6 +260,19 @@ for r in transf_todas:
         "qtd": r[9], "crit": crit, "cls": CRITICIDADE_CLASSE.get(crit, ""), "prazo": prazo,
     })
 transf_todas_json = json.dumps(transf_todas_data, ensure_ascii=False)
+
+
+def linhas_amet():
+    out = []
+    for f in amet_filiais:
+        giro = pct(f["vendido"] / f["estoque"]) if f["estoque"] else "-"
+        out.append(
+            "<tr><td>{fil}</td><td class='num'>{est}</td><td class='num'>{ven}</td>"
+            "<td class='num'>{giro}</td></tr>".format(
+                fil=f["filial"], est=f["estoque"], ven=f["vendido"], giro=giro
+            )
+        )
+    return "\n".join(out)
 
 
 html = rf"""<!DOCTYPE html>
@@ -311,6 +371,7 @@ html = rf"""<!DOCTYPE html>
   <a href="#pedidos" class="nav-link">📦 Pedidos</a>
   <a href="#notas" class="nav-link">🧾 Notas Fiscais</a>
   <a href="#transferencias" class="nav-link">🔄 Transferências</a>
+  <a href="#amet" class="nav-link">🛡️ Películas AMET</a>
 </nav>
 <div class="content">
 <header>
@@ -434,6 +495,29 @@ html = rf"""<!DOCTYPE html>
   </table>
   </div>
   <div class="pager" id="contador-transf"></div>
+</section>
+
+<section id="amet">
+  <h2>🛡️ Películas AMET por Filial</h2>
+  <p style="color:var(--muted); font-size:13px; margin:-8px 0 16px;">Estoque atualizado em {amet_data_estoque} · Vendas de {amet_periodo_vendas}</p>
+  <div class="cards">
+    <div class="card"><div class="label">Estoque total (peças)</div><div class="value">{amet_estoque_total}</div></div>
+    <div class="card ok"><div class="label">Vendido no período (peças)</div><div class="value">{amet_vendido_total}</div></div>
+    <div class="card"><div class="label">Filiais monitoradas</div><div class="value">{len(amet_filiais)}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box wide"><h4>Estoque x Vendido por filial</h4><div class="canvas-wrap"><canvas id="chart-amet-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Estoque e vendas por filial</h3>
+  <input class="filtro" data-target="tbl-amet" placeholder="Filtrar por filial...">
+  <div class="table-wrap">
+  <table id="tbl-amet" class="sortable">
+    <thead><tr><th>Filial</th><th>Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
+    <tbody>
+    {linhas_amet()}
+    </tbody>
+  </table>
+  </div>
 </section>
 
 </main>
@@ -899,6 +983,23 @@ new Chart(document.getElementById('chart-transf-prazo'), {{
     datasets: [{{ label: 'Transferências', data: CHART_DATA.transfPrazo.values, backgroundColor: COR_ACCENT }}]
   }},
   options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+}});
+
+new Chart(document.getElementById('chart-amet-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.amet.labels,
+    datasets: [
+      {{ label: 'Estoque', data: CHART_DATA.amet.estoque, backgroundColor: COR_ACCENT }},
+      {{ label: 'Vendido', data: CHART_DATA.amet.vendido, backgroundColor: COR_OK }}
+    ]
+  }},
+  options: {{
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {{ legend: {{ position: 'bottom' }} }}
+  }}
 }});
 </script>
 </body>
