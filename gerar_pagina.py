@@ -202,19 +202,17 @@ def linhas_notas():
     return "\n".join(out)
 
 
-def linhas_transf():
-    out = []
-    for r in transf_todas:
-        crit = r[11] or ""
-        out.append(
-            "<tr><td>{orig}</td><td class='num'>{dias}</td><td>{dest}</td><td>{user}</td>"
-            "<td>{nf}</td><td>{prod}</td><td>{desc}</td><td class='num'>{qtd}</td>"
-            "<td><span class='pill {cls}'>{crit}</span></td></tr>".format(
-                orig=r[0], dias=round(r[2] or 0), dest=r[3], user=r[4], nf=r[5],
-                prod=r[7], desc=r[8], qtd=r[9], crit=crit, cls=CRITICIDADE_CLASSE.get(crit, "")
-            )
-        )
-    return "\n".join(out)
+transf_todas_data = []
+for r in transf_todas:
+    crit = r[11] or ""
+    prazo = r[12] or ""
+    dias_num = round(r[2] or 0)
+    transf_todas_data.append({
+        "orig": r[0] or "", "dias": dias_num, "dias_num": dias_num, "dest": r[3] or "",
+        "user": r[4] or "", "nf": r[5] or "", "prod": r[7] or "", "desc": r[8] or "",
+        "qtd": r[9], "crit": crit, "cls": CRITICIDADE_CLASSE.get(crit, ""), "prazo": prazo,
+    })
+transf_todas_json = json.dumps(transf_todas_data, ensure_ascii=False)
 
 
 html = rf"""<!DOCTYPE html>
@@ -416,15 +414,26 @@ html = rf"""<!DOCTYPE html>
     <div class="chart-box"><h4>Tempo fora do estoque</h4><div class="canvas-wrap"><canvas id="chart-transf-prazo"></canvas></div></div>
   </div>
   <h3>📋 Todas as transferências pendentes</h3>
-  <input class="filtro" data-target="tbl-transf" placeholder="Filtrar por filial, NF ou produto...">
+  <div class="filtros-pedidos">
+    <input class="filtro" id="filtro-transf" placeholder="Buscar por filial, NF ou produto...">
+    <div class="msel" id="msel-torig"><button type="button" class="msel-btn" data-default="Todas as filiais de origem">Todas as filiais de origem</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-tdest"><button type="button" class="msel-btn" data-default="Todas as filiais de destino">Todas as filiais de destino</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-tcrit"><button type="button" class="msel-btn" data-default="Criticidade (todas)">Criticidade (todas)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-tprazo"><button type="button" class="msel-btn" data-default="Status de prazo (todos)">Status de prazo (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-tdias"><button type="button" class="msel-btn" data-default="Dias fora do estoque (todos)">Dias fora do estoque (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <button id="limpar-filtros-transf" type="button">Limpar filtros</button>
+  </div>
   <div class="table-wrap">
-  <table id="tbl-transf" class="sortable">
-    <thead><tr><th>Filial Origem</th><th>Dias fora do estoque</th><th>Filial Destino</th><th>Usuário Solicitante</th><th>NF</th><th>Produto</th><th>Descrição</th><th>Qtde</th><th>Criticidade</th></tr></thead>
-    <tbody>
-    {linhas_transf()}
-    </tbody>
+  <table id="tbl-transf">
+    <thead><tr>
+      <th data-col="orig">Filial Origem</th><th data-col="dias">Dias fora do estoque</th><th data-col="dest">Filial Destino</th>
+      <th data-col="user">Usuário Solicitante</th><th data-col="nf">NF</th><th data-col="prod">Produto</th>
+      <th data-col="desc">Descrição</th><th data-col="qtd">Qtde</th><th data-col="crit">Criticidade</th>
+    </tr></thead>
+    <tbody id="tbody-transf"></tbody>
   </table>
   </div>
+  <div class="pager" id="contador-transf"></div>
 </section>
 
 </main>
@@ -500,7 +509,97 @@ function atualizarMenuAtivo() {{
 window.addEventListener('scroll', atualizarMenuAtivo);
 atualizarMenuAtivo();
 
-// ---- tabela de pedidos (paginada, com 2720 linhas nao da pra desenhar tudo de uma vez) ----
+// ---- helpers compartilhados de filtro (multi-select, faixas de dias) ----
+function valoresUnicos(dados, campo) {{
+  var vistos = {{}};
+  var out = [];
+  dados.forEach(function(r) {{
+    var v = r[campo];
+    if (v && !vistos[v]) {{ vistos[v] = true; out.push(v); }}
+  }});
+  out.sort();
+  return out;
+}}
+
+var FAIXAS_DIAS = [
+  ['np', 'Ainda não processado'], ['0-3', '0-3 dias'], ['4-7', '4-7 dias'],
+  ['8-15', '8-15 dias'], ['16-30', '16-30 dias'], ['30+', '30+ dias']
+];
+
+function diasNaFaixa(dias, faixa) {{
+  if (dias < 0) return faixa === 'np';
+  if (faixa === 'np') return false;
+  if (faixa === '0-3') return dias <= 3;
+  if (faixa === '4-7') return dias >= 4 && dias <= 7;
+  if (faixa === '8-15') return dias >= 8 && dias <= 15;
+  if (faixa === '16-30') return dias >= 16 && dias <= 30;
+  if (faixa === '30+') return dias > 30;
+  return true;
+}}
+
+// ---- componente de multi-selecao (checkbox dropdown), reutilizavel em qualquer tabela ----
+function criarMultiSelect(id, pares, set, onChange) {{
+  var raiz = document.getElementById('msel-' + id);
+  var btn = raiz.querySelector('.msel-btn');
+  var painel = raiz.querySelector('.msel-panel');
+  var opcoes = raiz.querySelector('.msel-options');
+  painel.addEventListener('click', function(e) {{ e.stopPropagation(); }});
+
+  pares.forEach(function(par) {{
+    var label = document.createElement('label');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = par[0];
+    cb.addEventListener('change', function() {{
+      if (cb.checked) set.add(par[0]); else set.delete(par[0]);
+      atualizarLabel();
+      onChange();
+    }});
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(par[1]));
+    opcoes.appendChild(label);
+  }});
+
+  function atualizarLabel() {{
+    var padrao = btn.dataset.default;
+    if (set.size === 0) btn.textContent = padrao;
+    else if (set.size === 1) btn.textContent = pares.filter(function(p) {{ return set.has(p[0]); }})[0][1];
+    else btn.textContent = set.size + ' selecionadas';
+  }}
+
+  btn.addEventListener('click', function(e) {{
+    e.stopPropagation();
+    var jaAberto = raiz.classList.contains('open');
+    document.querySelectorAll('.msel.open').forEach(function(m) {{ m.classList.remove('open'); }});
+    if (!jaAberto) raiz.classList.add('open');
+  }});
+
+  raiz.querySelector('[data-act="all"]').addEventListener('click', function() {{
+    opcoes.querySelectorAll('input').forEach(function(cb) {{ cb.checked = true; set.add(cb.value); }});
+    atualizarLabel();
+    onChange();
+  }});
+  raiz.querySelector('[data-act="none"]').addEventListener('click', function() {{
+    opcoes.querySelectorAll('input').forEach(function(cb) {{ cb.checked = false; }});
+    set.clear();
+    atualizarLabel();
+    onChange();
+  }});
+
+  return {{
+    limpar: function() {{
+      set.clear();
+      opcoes.querySelectorAll('input').forEach(function(cb) {{ cb.checked = false; }});
+      atualizarLabel();
+    }}
+  }};
+}}
+
+document.addEventListener('click', function() {{
+  document.querySelectorAll('.msel.open').forEach(function(m) {{ m.classList.remove('open'); }});
+}});
+
+// ---- tabela de pedidos (paginada, com muitas linhas nao da pra desenhar tudo de uma vez) ----
 (function() {{
   var DADOS = {pedidos_detalhe_json};
   var PAGE_SIZE = 50;
@@ -508,96 +607,6 @@ atualizarMenuAtivo();
     filtro: '', sortCol: null, sortDir: 'asc', pagina: 1,
     filial: new Set(), status: new Set(), stprod: new Set(), entrada: new Set(), dias: new Set()
   }};
-
-  function valoresUnicos(campo) {{
-    var vistos = {{}};
-    var out = [];
-    DADOS.forEach(function(r) {{
-      var v = r[campo];
-      if (v && !vistos[v]) {{ vistos[v] = true; out.push(v); }}
-    }});
-    out.sort();
-    return out;
-  }}
-
-  var FAIXAS_DIAS = [
-    ['np', 'Ainda não processado'], ['0-3', '0-3 dias'], ['4-7', '4-7 dias'],
-    ['8-15', '8-15 dias'], ['16-30', '16-30 dias'], ['30+', '30+ dias']
-  ];
-
-  function diasNaFaixa(dias, faixa) {{
-    if (dias < 0) return faixa === 'np';
-    if (faixa === 'np') return false;
-    if (faixa === '0-3') return dias <= 3;
-    if (faixa === '4-7') return dias >= 4 && dias <= 7;
-    if (faixa === '8-15') return dias >= 8 && dias <= 15;
-    if (faixa === '16-30') return dias >= 16 && dias <= 30;
-    if (faixa === '30+') return dias > 30;
-    return true;
-  }}
-
-  // ---- componente de multi-selecao (checkbox dropdown) ----
-  function criarMultiSelect(id, pares, campoEstado, onChange) {{
-    var raiz = document.getElementById('msel-' + id);
-    var btn = raiz.querySelector('.msel-btn');
-    var painel = raiz.querySelector('.msel-panel');
-    var opcoes = raiz.querySelector('.msel-options');
-    var set = estado[campoEstado];
-    painel.addEventListener('click', function(e) {{ e.stopPropagation(); }});
-
-    pares.forEach(function(par) {{
-      var label = document.createElement('label');
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.value = par[0];
-      cb.addEventListener('change', function() {{
-        if (cb.checked) set.add(par[0]); else set.delete(par[0]);
-        atualizarLabel();
-        onChange();
-      }});
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(par[1]));
-      opcoes.appendChild(label);
-    }});
-
-    function atualizarLabel() {{
-      var padrao = btn.dataset.default;
-      if (set.size === 0) btn.textContent = padrao;
-      else if (set.size === 1) btn.textContent = pares.filter(function(p) {{ return set.has(p[0]); }})[0][1];
-      else btn.textContent = set.size + ' selecionadas';
-    }}
-
-    btn.addEventListener('click', function(e) {{
-      e.stopPropagation();
-      var jaAberto = raiz.classList.contains('open');
-      document.querySelectorAll('.msel.open').forEach(function(m) {{ m.classList.remove('open'); }});
-      if (!jaAberto) raiz.classList.add('open');
-    }});
-
-    raiz.querySelector('[data-act="all"]').addEventListener('click', function() {{
-      opcoes.querySelectorAll('input').forEach(function(cb) {{ cb.checked = true; set.add(cb.value); }});
-      atualizarLabel();
-      onChange();
-    }});
-    raiz.querySelector('[data-act="none"]').addEventListener('click', function() {{
-      opcoes.querySelectorAll('input').forEach(function(cb) {{ cb.checked = false; }});
-      set.clear();
-      atualizarLabel();
-      onChange();
-    }});
-
-    return {{
-      limpar: function() {{
-        set.clear();
-        opcoes.querySelectorAll('input').forEach(function(cb) {{ cb.checked = false; }});
-        atualizarLabel();
-      }}
-    }};
-  }}
-
-  document.addEventListener('click', function() {{
-    document.querySelectorAll('.msel.open').forEach(function(m) {{ m.classList.remove('open'); }});
-  }});
 
   var COLS = {{
     dreal: {{ sort: function(r) {{ return r.dreal_ts; }} }},
@@ -688,11 +697,11 @@ atualizarMenuAtivo();
     render();
   }}
 
-  var mselFilial = criarMultiSelect('filial', valoresUnicos('fil').map(function(v) {{ return [v, v]; }}), 'filial', aoMudarFiltro);
-  var mselStatus = criarMultiSelect('status', valoresUnicos('status').map(function(v) {{ return [v, v]; }}), 'status', aoMudarFiltro);
-  var mselStprod = criarMultiSelect('stprod', valoresUnicos('stprod').map(function(v) {{ return [v, v]; }}), 'stprod', aoMudarFiltro);
-  var mselEntrada = criarMultiSelect('entrada', valoresUnicos('entrada').map(function(v) {{ return [v, v]; }}), 'entrada', aoMudarFiltro);
-  var mselDias = criarMultiSelect('dias', FAIXAS_DIAS, 'dias', aoMudarFiltro);
+  var mselFilial = criarMultiSelect('filial', valoresUnicos(DADOS, 'fil').map(function(v) {{ return [v, v]; }}), estado.filial, aoMudarFiltro);
+  var mselStatus = criarMultiSelect('status', valoresUnicos(DADOS, 'status').map(function(v) {{ return [v, v]; }}), estado.status, aoMudarFiltro);
+  var mselStprod = criarMultiSelect('stprod', valoresUnicos(DADOS, 'stprod').map(function(v) {{ return [v, v]; }}), estado.stprod, aoMudarFiltro);
+  var mselEntrada = criarMultiSelect('entrada', valoresUnicos(DADOS, 'entrada').map(function(v) {{ return [v, v]; }}), estado.entrada, aoMudarFiltro);
+  var mselDias = criarMultiSelect('dias', FAIXAS_DIAS, estado.dias, aoMudarFiltro);
 
   document.getElementById('limpar-filtros-pedidos').addEventListener('click', function() {{
     estado.filtro = '';
@@ -709,6 +718,113 @@ atualizarMenuAtivo();
       estado.sortDir = (estado.sortCol === col && estado.sortDir === 'asc') ? 'desc' : 'asc';
       estado.sortCol = col;
       estado.pagina = 1;
+      render();
+    }});
+  }});
+
+  render();
+}})();
+
+// ---- tabela de transferencias pendentes (com filtros combinaveis, sem paginacao pois sao poucas centenas) ----
+(function() {{
+  var DADOS = {transf_todas_json};
+  var estado = {{
+    filtro: '', sortCol: 'dias', sortDir: 'desc',
+    orig: new Set(), dest: new Set(), crit: new Set(), prazo: new Set(), dias: new Set()
+  }};
+
+  var FAIXAS_DIAS_TRANSF = [
+    ['0-3', '0-3 dias'], ['4-7', '4-7 dias'], ['8-15', '8-15 dias'], ['16-30', '16-30 dias'], ['30+', '30+ dias']
+  ];
+
+  var COLS = {{
+    orig: {{ sort: function(r) {{ return r.orig.toLowerCase(); }} }},
+    dias: {{ sort: function(r) {{ return r.dias_num; }} }},
+    dest: {{ sort: function(r) {{ return r.dest.toLowerCase(); }} }},
+    user: {{ sort: function(r) {{ return r.user.toLowerCase(); }} }},
+    nf: {{ sort: function(r) {{ return r.nf.toLowerCase(); }} }},
+    prod: {{ sort: function(r) {{ return r.prod.toLowerCase(); }} }},
+    desc: {{ sort: function(r) {{ return r.desc.toLowerCase(); }} }},
+    qtd: {{ sort: function(r) {{ return r.qtd; }} }},
+    crit: {{ sort: function(r) {{ return r.crit.toLowerCase(); }} }}
+  }};
+
+  function linhaHtml(r) {{
+    return '<tr><td>' + r.orig + '</td><td class="num">' + r.dias + '</td><td>' + r.dest + '</td>' +
+      '<td>' + r.user + '</td><td>' + r.nf + '</td><td>' + r.prod + '</td><td>' + r.desc + '</td>' +
+      '<td class="num">' + r.qtd + '</td><td><span class="pill ' + r.cls + '">' + r.crit + '</span></td></tr>';
+  }}
+
+  function dadosFiltrados() {{
+    var q = estado.filtro.toLowerCase();
+    var out = DADOS.filter(function(r) {{
+      if (q && (r.orig + ' ' + r.dest + ' ' + r.nf + ' ' + r.prod + ' ' + r.desc).toLowerCase().indexOf(q) === -1) return false;
+      if (estado.orig.size && !estado.orig.has(r.orig)) return false;
+      if (estado.dest.size && !estado.dest.has(r.dest)) return false;
+      if (estado.crit.size && !estado.crit.has(r.crit)) return false;
+      if (estado.prazo.size && !estado.prazo.has(r.prazo)) return false;
+      if (estado.dias.size) {{
+        var algumaFaixaBate = false;
+        estado.dias.forEach(function(faixa) {{ if (diasNaFaixa(r.dias_num, faixa)) algumaFaixaBate = true; }});
+        if (!algumaFaixaBate) return false;
+      }}
+      return true;
+    }});
+    if (estado.sortCol) {{
+      var getVal = COLS[estado.sortCol].sort;
+      var dir = estado.sortDir === 'asc' ? 1 : -1;
+      out.sort(function(a, b) {{
+        var av = getVal(a), bv = getVal(b);
+        if (av < bv) return -1 * dir;
+        if (av > bv) return 1 * dir;
+        return 0;
+      }});
+    }}
+    return out;
+  }}
+
+  function render() {{
+    var filtrados = dadosFiltrados();
+    document.getElementById('tbody-transf').innerHTML = filtrados.map(linhaHtml).join('');
+    document.getElementById('contador-transf').innerHTML =
+      '<span>Mostrando ' + filtrados.length + ' de ' + DADOS.length + ' transferências</span>';
+
+    document.querySelectorAll('#tbl-transf thead th').forEach(function(th) {{
+      var ind = th.querySelector('.sort-ind');
+      if (ind) ind.remove();
+      if (th.dataset.col === estado.sortCol) {{
+        var span = document.createElement('span');
+        span.className = 'sort-ind';
+        span.textContent = estado.sortDir === 'asc' ? ' ▲' : ' ▼';
+        th.appendChild(span);
+      }}
+    }});
+  }}
+
+  document.getElementById('filtro-transf').addEventListener('input', function(e) {{
+    estado.filtro = e.target.value;
+    render();
+  }});
+
+  var mselOrig = criarMultiSelect('torig', valoresUnicos(DADOS, 'orig').map(function(v) {{ return [v, v]; }}), estado.orig, render);
+  var mselDest = criarMultiSelect('tdest', valoresUnicos(DADOS, 'dest').map(function(v) {{ return [v, v]; }}), estado.dest, render);
+  var mselCrit = criarMultiSelect('tcrit', valoresUnicos(DADOS, 'crit').map(function(v) {{ return [v, v]; }}), estado.crit, render);
+  var mselPrazo = criarMultiSelect('tprazo', valoresUnicos(DADOS, 'prazo').map(function(v) {{ return [v, v]; }}), estado.prazo, render);
+  var mselDias = criarMultiSelect('tdias', FAIXAS_DIAS_TRANSF, estado.dias, render);
+
+  document.getElementById('limpar-filtros-transf').addEventListener('click', function() {{
+    estado.filtro = '';
+    document.getElementById('filtro-transf').value = '';
+    [mselOrig, mselDest, mselCrit, mselPrazo, mselDias].forEach(function(m) {{ m.limpar(); }});
+    render();
+  }});
+
+  document.querySelectorAll('#tbl-transf thead th').forEach(function(th) {{
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', function() {{
+      var col = th.dataset.col;
+      estado.sortDir = (estado.sortCol === col && estado.sortDir === 'asc') ? 'desc' : 'asc';
+      estado.sortCol = col;
       render();
     }});
   }});
