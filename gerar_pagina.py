@@ -111,7 +111,9 @@ for r in data_rows:
         transf_resumo[label] = r[15]
 
 transf_criticas = [r for r in data_rows if r[11] == "CRÍTICO"]
-transf_criticas.sort(key=lambda r: (r[2] or 0), reverse=True)
+
+transf_todas = [r for r in data_rows if r[0] is not None]
+transf_todas.sort(key=lambda r: (r[2] or 0), reverse=True)
 
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -151,6 +153,7 @@ chart_data_json = json.dumps(chart_data, ensure_ascii=False)
 
 # ----------------------------------------------------------------- HTML
 STATUS_CLASSE = {"ENTREGUE": "ok", "PENDENTE DE ENTRADA": "warn", "ATRASADO": "bad"}
+CRITICIDADE_CLASSE = {"OK": "ok", "ATENÇÃO": "warn", "CRÍTICO": "bad"}
 
 
 def epoch(dt):
@@ -201,12 +204,14 @@ def linhas_notas():
 
 def linhas_transf():
     out = []
-    for r in transf_criticas:
+    for r in transf_todas:
+        crit = r[11] or ""
         out.append(
             "<tr><td>{orig}</td><td class='num'>{dias}</td><td>{dest}</td><td>{user}</td>"
-            "<td>{nf}</td><td>{prod}</td><td>{desc}</td><td class='num'>{qtd}</td></tr>".format(
+            "<td>{nf}</td><td>{prod}</td><td>{desc}</td><td class='num'>{qtd}</td>"
+            "<td><span class='pill {cls}'>{crit}</span></td></tr>".format(
                 orig=r[0], dias=round(r[2] or 0), dest=r[3], user=r[4], nf=r[5],
-                prod=r[7], desc=r[8], qtd=r[9]
+                prod=r[7], desc=r[8], qtd=r[9], crit=crit, cls=CRITICIDADE_CLASSE.get(crit, "")
             )
         )
     return "\n".join(out)
@@ -410,11 +415,11 @@ html = rf"""<!DOCTYPE html>
     <div class="chart-box"><h4>Transferências por criticidade</h4><div class="canvas-wrap"><canvas id="chart-transf-status"></canvas></div></div>
     <div class="chart-box"><h4>Tempo fora do estoque</h4><div class="canvas-wrap"><canvas id="chart-transf-prazo"></canvas></div></div>
   </div>
-  <h3>⚠️ Transferências com criticidade elevada</h3>
+  <h3>📋 Todas as transferências pendentes</h3>
   <input class="filtro" data-target="tbl-transf" placeholder="Filtrar por filial, NF ou produto...">
   <div class="table-wrap">
   <table id="tbl-transf" class="sortable">
-    <thead><tr><th>Filial Origem</th><th>Dias fora do estoque</th><th>Filial Destino</th><th>Usuário Solicitante</th><th>NF</th><th>Produto</th><th>Descrição</th><th>Qtde</th></tr></thead>
+    <thead><tr><th>Filial Origem</th><th>Dias fora do estoque</th><th>Filial Destino</th><th>Usuário Solicitante</th><th>NF</th><th>Produto</th><th>Descrição</th><th>Qtde</th><th>Criticidade</th></tr></thead>
     <tbody>
     {linhas_transf()}
     </tbody>
@@ -785,4 +790,4 @@ new Chart(document.getElementById('chart-transf-prazo'), {{
 """
 
 OUT.write_text(html, encoding="utf-8")
-print(f"OK: {OUT} gerado com {len(notas_atrasadas)} notas atrasadas e {len(transf_criticas)} transferências críticas.")
+print(f"OK: {OUT} gerado com {len(notas_atrasadas)} notas atrasadas e {len(transf_todas)} transferências pendentes ({len(transf_criticas)} críticas).")
