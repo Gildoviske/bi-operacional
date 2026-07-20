@@ -30,6 +30,11 @@ def load(arquivo, aba):
     return list(wb[aba].iter_rows(values_only=True))
 
 
+def mtime_str(arquivo):
+    ts = (BASE / arquivo).stat().st_mtime
+    return datetime.fromtimestamp(ts).strftime("%d/%m/%Y às %H:%M")
+
+
 def pct(v):
     return f"{v * 100:.1f}%".replace(".", ",")
 
@@ -45,6 +50,7 @@ def data_str(v):
 
 
 # ---------------------------------------------------------------- PEDIDOS
+pedidos_mtime = mtime_str("CONTROLE DE PEDIDOS.xlsx")
 rows = load("CONTROLE DE PEDIDOS.xlsx", "RESUMO")
 
 
@@ -88,6 +94,7 @@ pedidos_detalhe = load("CONTROLE DE PEDIDOS.xlsx", "CONTROLE PEDIDOS")[1:]
 pedidos_detalhe.sort(key=lambda r: r[3] or datetime.min, reverse=True)
 
 # --------------------------------------------------------- NOTAS FISCAIS
+notas_mtime = mtime_str("CONTROLE NOTAS FISCAIS PENDENTES DE ENTRADA.xlsx")
 rows = load("CONTROLE NOTAS FISCAIS PENDENTES DE ENTRADA.xlsx", "NOTAS FISCAIS PENDENTES")
 data_rows = rows[1:]
 
@@ -101,6 +108,7 @@ notas_atrasadas = [r for r in data_rows if r[12] == "ATRASADO"]
 notas_atrasadas.sort(key=lambda r: (r[11] or 0), reverse=True)
 
 # ------------------------------------------------------- TRANSFERÊNCIAS
+transf_mtime = mtime_str("TRANSFERÊNCIAS PENDENTES.xlsx")
 rows = load("TRANSFERÊNCIAS PENDENTES.xlsx", "TRANSFERENCIAS PENDENTES")
 data_rows = rows[1:]
 
@@ -116,6 +124,7 @@ transf_todas = [r for r in data_rows if r[0] is not None]
 transf_todas.sort(key=lambda r: (r[2] or 0), reverse=True)
 
 # ------------------------------------------------------------- AMET
+amet_mtime = mtime_str("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx")
 rows = load("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx", "AMET NAS FILIAIS")
 
 amet_data_estoque = (rows[0][0] or "").split("ATUALIZADO DIA ")[-1].rstrip(")")
@@ -306,7 +315,8 @@ html = rf"""<!DOCTYPE html>
   .badge-atualizacao .gerado {{ font-size: 11px; color: var(--muted); margin-top: 2px; }}
   main {{ padding: 24px 32px 64px; max-width: 1200px; margin: 0 auto; }}
   section {{ margin-bottom: 40px; scroll-margin-top: 16px; }}
-  section > h2 {{ font-size: 18px; border-left: 4px solid var(--accent); padding-left: 10px; margin-bottom: 16px; }}
+  section > h2 {{ font-size: 18px; border-left: 4px solid var(--accent); padding-left: 10px; margin-bottom: 4px; }}
+  .secao-mtime {{ color: var(--muted); font-size: 13px; margin: 0 0 16px 14px; }}
   @media (max-width: 860px) {{
     .layout {{ display: block; }}
     .sidebar {{ position: sticky; width: 100%; height: auto; display: flex; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 0; z-index: 10; }}
@@ -388,6 +398,7 @@ html = rf"""<!DOCTYPE html>
 
 <section id="pedidos">
   <h2>📦 Pedidos GN — Status Geral</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {pedidos_mtime}</p>
   <div class="cards">
     <div class="card"><div class="label">Total de pedidos</div><div class="value">{pedidos['total']}</div></div>
     <div class="card ok"><div class="label">Entregue</div><div class="value">{pedidos['entregue'][0]}</div><div class="sub">{pct(pedidos['entregue'][1])}</div></div>
@@ -437,6 +448,7 @@ html = rf"""<!DOCTYPE html>
 
 <section id="notas">
   <h2>🧾 Notas Fiscais Pendentes de Entrada</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {notas_mtime}</p>
   <div class="cards">
     <div class="card"><div class="label">Total de notas</div><div class="value">{notas_resumo.get('Total de notas (linhas)', 0)}</div></div>
     <div class="card warn"><div class="label">Pendentes</div><div class="value">{notas_resumo.get('Pendentes (NÃO)', 0)}</div></div>
@@ -463,6 +475,7 @@ html = rf"""<!DOCTYPE html>
 
 <section id="transferencias">
   <h2>🔄 Transferências Pendentes</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {transf_mtime}</p>
   <div class="cards">
     <div class="card"><div class="label">Qtde total (unidades)</div><div class="value">{transf_resumo.get('Qtde total (unidades)', 0)}</div></div>
     <div class="card ok"><div class="label">No prazo</div><div class="value">{transf_resumo.get('No prazo', 0)}</div></div>
@@ -499,7 +512,7 @@ html = rf"""<!DOCTYPE html>
 
 <section id="amet">
   <h2>🛡️ Películas AMET por Filial</h2>
-  <p style="color:var(--muted); font-size:13px; margin:-8px 0 16px;">Estoque atualizado em {amet_data_estoque} · Vendas de {amet_periodo_vendas}</p>
+  <p class="secao-mtime">🕒 Planilha atualizada em {amet_mtime} · Estoque referente a {amet_data_estoque} · Vendas de {amet_periodo_vendas}</p>
   <div class="cards">
     <div class="card"><div class="label">Estoque total (peças)</div><div class="value">{amet_estoque_total}</div></div>
     <div class="card ok"><div class="label">Vendido no período (peças)</div><div class="value">{amet_vendido_total}</div></div>
