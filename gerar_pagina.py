@@ -128,33 +128,37 @@ amet_mtime = mtime_str("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx")
 rows = load("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx", "AMET NAS FILIAIS")
 
 amet_data_estoque = (rows[0][0] or "").split("ATUALIZADO DIA ")[-1].rstrip(")")
-amet_periodo_vendas = (rows[0][8] or "").split("(DO DIA ")[-1].rstrip(")")
 
-amet_estoque_por_filial = {}
-capturando = False
-for r in rows:
-    if r[0] == "Filial":
-        capturando = True
-        continue
-    if capturando:
-        if r[0] is None:
-            continue
-        if r[0] == "Total Geral":
-            break
-        amet_estoque_por_filial[r[0]] = r[6] or 0
+# lê pelas posições do cabeçalho (linha com "Filial"/"Total Geral") em vez de índice fixo de
+# coluna, pois a planilha já mudou de estrutura (colunas de produto adicionadas/removidas).
+header = next(r for r in rows if r[0] == "Filial")
+col_filial_1, col_total_1 = 0, header.index("Total Geral")
+col_filial_2 = header.index("Filial", col_total_1 + 1)
+col_total_2 = header.index("Total Geral", col_filial_2 + 1)
 
-amet_vendido_por_filial = {}
-capturando = False
-for r in rows:
-    if r[8] == "Filial":
-        capturando = True
-        continue
-    if capturando:
-        if r[8] is None:
+amet_periodo_vendas = (rows[0][col_filial_2] or "").split("(DO DIA ")[-1].rstrip(")")
+
+
+def capturar_totais(col_filial, col_total):
+    out = {}
+    capturando = False
+    for r in rows:
+        if len(r) <= max(col_filial, col_total):
             continue
-        if r[8] == "Total Geral":
-            break
-        amet_vendido_por_filial[r[8]] = r[13] or 0
+        if r[col_filial] == "Filial":
+            capturando = True
+            continue
+        if capturando:
+            if r[col_filial] is None:
+                continue
+            if r[col_filial] == "Total Geral":
+                break
+            out[r[col_filial]] = r[col_total] or 0
+    return out
+
+
+amet_estoque_por_filial = capturar_totais(col_filial_1, col_total_1)
+amet_vendido_por_filial = capturar_totais(col_filial_2, col_total_2)
 
 amet_filiais = []
 for nome in sorted(set(amet_estoque_por_filial) | set(amet_vendido_por_filial)):
@@ -165,6 +169,44 @@ amet_filiais.sort(key=lambda f: f["vendido"], reverse=True)
 
 amet_estoque_total = sum(amet_estoque_por_filial.values())
 amet_vendido_total = sum(amet_vendido_por_filial.values())
+
+# ------------------------------------------------------- ACESSÓRIOS
+acessorios_mtime = mtime_str("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx")
+acessorios_rows = load("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx", "SALDO PRODUTOS NAS FILIAIS")[1:]
+acessorios_rows = [r for r in acessorios_rows if r[0] is not None]
+
+
+def montar_acessorios(rows):
+    itens = []
+    saldo_por_filial = {}
+    for r in rows:
+        saldo = r[12] or 0
+        valor = r[20] or 0
+        itens.append({
+            "filial": r[0] or "", "desc": r[3] or "", "subgrupo": r[6] or "-",
+            "fabricante": r[8] or "-", "saldo": saldo, "disponivel": r[16] or 0,
+            "valor": valor, "valor_total": round(saldo * valor, 2),
+        })
+        saldo_por_filial[r[0]] = saldo_por_filial.get(r[0], 0) + saldo
+    itens.sort(key=lambda x: x["saldo"], reverse=True)
+    filiais_ordenadas = sorted(saldo_por_filial.items(), key=lambda kv: kv[1], reverse=True)
+    resumo = {
+        "itens": len(itens),
+        "saldo_total": sum(i["saldo"] for i in itens),
+        "valor_total": sum(i["valor_total"] for i in itens),
+        "filiais": len(saldo_por_filial),
+    }
+    return itens, filiais_ordenadas, resumo
+
+
+acessorios_diversos_rows = [r for r in acessorios_rows if r[5] == "ACESSORIOS DIVERSOS"]
+acessorios_tim_rows = [r for r in acessorios_rows if r[5] == "ACESSORIOS TIM"]
+
+acessorios_diversos_itens, acessorios_diversos_filiais, acessorios_diversos_resumo = montar_acessorios(acessorios_diversos_rows)
+acessorios_tim_itens, acessorios_tim_filiais, acessorios_tim_resumo = montar_acessorios(acessorios_tim_rows)
+
+acessorios_diversos_json = json.dumps(acessorios_diversos_itens, ensure_ascii=False)
+acessorios_tim_json = json.dumps(acessorios_tim_itens, ensure_ascii=False)
 
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -203,6 +245,14 @@ chart_data = {
         "labels": [f["filial"] for f in amet_filiais],
         "estoque": [f["estoque"] for f in amet_filiais],
         "vendido": [f["vendido"] for f in amet_filiais],
+    },
+    "acessoriosDiversos": {
+        "labels": [f[0] for f in acessorios_diversos_filiais],
+        "saldo": [f[1] for f in acessorios_diversos_filiais],
+    },
+    "acessoriosTim": {
+        "labels": [f[0] for f in acessorios_tim_filiais],
+        "saldo": [f[1] for f in acessorios_tim_filiais],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -282,6 +332,43 @@ def linhas_amet():
             )
         )
     return "\n".join(out)
+
+
+def secao_acessorios(id_, titulo, mtime, resumo, prefixo):
+    return f"""
+<section id="{id_}">
+  <h2>{titulo}</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {mtime}</p>
+  <div class="cards">
+    <div class="card"><div class="label">Itens (linhas de estoque)</div><div class="value">{resumo['itens']}</div></div>
+    <div class="card ok"><div class="label">Saldo total (unidades)</div><div class="value">{resumo['saldo_total']}</div></div>
+    <div class="card"><div class="label">Valor total em estoque</div><div class="value">{brl(resumo['valor_total'])}</div></div>
+    <div class="card"><div class="label">Filiais com estoque</div><div class="value">{resumo['filiais']}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box wide"><h4>Saldo por filial</h4><div class="canvas-wrap"><canvas id="chart-{prefixo}-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Itens em estoque por filial</h3>
+  <div class="filtros-pedidos">
+    <input class="filtro" id="filtro-{prefixo}" placeholder="Buscar por filial, descrição...">
+    <div class="msel" id="msel-{prefixo}-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-{prefixo}-subgrupo"><button type="button" class="msel-btn" data-default="Todos os tipos">Todos os tipos</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-{prefixo}-fabricante"><button type="button" class="msel-btn" data-default="Todos os fabricantes">Todos os fabricantes</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <button id="limpar-{prefixo}" type="button">Limpar filtros</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-{prefixo}">
+    <thead><tr>
+      <th data-col="filial">Filial</th><th data-col="desc">Descrição</th><th data-col="subgrupo">Tipo</th>
+      <th data-col="fabricante">Fabricante</th><th data-col="saldo">Saldo</th><th data-col="disponivel">Disponível</th>
+      <th data-col="valor">Valor Unit.</th><th data-col="valor_total">Valor Total</th>
+    </tr></thead>
+    <tbody id="tbody-{prefixo}"></tbody>
+  </table>
+  </div>
+  <div class="pager" id="pager-{prefixo}"></div>
+</section>
+"""
 
 
 html = rf"""<!DOCTYPE html>
@@ -382,6 +469,8 @@ html = rf"""<!DOCTYPE html>
   <a href="#notas" class="nav-link">🧾 Notas Fiscais</a>
   <a href="#transferencias" class="nav-link">🔄 Transferências</a>
   <a href="#amet" class="nav-link">🛡️ Películas AMET</a>
+  <a href="#acessorios" class="nav-link">🎧 Acessórios</a>
+  <a href="#acessorios-tim" class="nav-link">📶 Fidelizados TIM</a>
 </nav>
 <div class="content">
 <header>
@@ -532,6 +621,9 @@ html = rf"""<!DOCTYPE html>
   </table>
   </div>
 </section>
+
+{secao_acessorios("acessorios", "🎧 Acessórios nas Filiais", acessorios_mtime, acessorios_diversos_resumo, "acessorios")}
+{secao_acessorios("acessorios-tim", "📶 Acessórios Fidelizados TIM nas Filiais", acessorios_mtime, acessorios_tim_resumo, "acessorios-tim")}
 
 </main>
 <footer>Gerado automaticamente a partir das planilhas de controle · Rocha Telecom</footer>
@@ -695,6 +787,98 @@ function criarMultiSelect(id, pares, set, onChange) {{
 document.addEventListener('click', function() {{
   document.querySelectorAll('.msel.open').forEach(function(m) {{ m.classList.remove('open'); }});
 }});
+
+// ---- fabrica generica de tabela paginada com busca + multi-selecao, usada pelas tabelas de acessorios ----
+function criarTabelaPaginada(opts) {{
+  var estado = {{ filtro: '', sortCol: opts.sortInicial || null, sortDir: 'desc', pagina: 1, sets: {{}} }};
+  opts.filtros.forEach(function(f) {{ estado.sets[f.campo] = new Set(); }});
+
+  function dadosFiltrados() {{
+    var q = estado.filtro.toLowerCase();
+    var out = opts.dados.filter(function(r) {{
+      if (q && opts.busca(r).toLowerCase().indexOf(q) === -1) return false;
+      for (var campo in estado.sets) {{
+        if (estado.sets[campo].size && !estado.sets[campo].has(r[campo])) return false;
+      }}
+      return true;
+    }});
+    if (estado.sortCol) {{
+      var getVal = opts.colunas[estado.sortCol];
+      var dir = estado.sortDir === 'asc' ? 1 : -1;
+      out.sort(function(a, b) {{
+        var av = getVal(a), bv = getVal(b);
+        if (av < bv) return -1 * dir;
+        if (av > bv) return 1 * dir;
+        return 0;
+      }});
+    }}
+    return out;
+  }}
+
+  function render() {{
+    var filtrados = dadosFiltrados();
+    var pager = document.getElementById(opts.pagerId);
+    if (opts.pageSize) {{
+      var totalPaginas = Math.max(1, Math.ceil(filtrados.length / opts.pageSize));
+      if (estado.pagina > totalPaginas) estado.pagina = totalPaginas;
+      var inicio = (estado.pagina - 1) * opts.pageSize;
+      document.getElementById(opts.tbodyId).innerHTML = filtrados.slice(inicio, inicio + opts.pageSize).map(opts.linhaHtml).join('');
+      pager.innerHTML =
+        '<button class="pp-prev" ' + (estado.pagina <= 1 ? 'disabled' : '') + '>‹ Anterior</button>' +
+        '<span>Página ' + estado.pagina + ' de ' + totalPaginas + ' (' + filtrados.length + ' itens)</span>' +
+        '<button class="pp-next" ' + (estado.pagina >= totalPaginas ? 'disabled' : '') + '>Próxima ›</button>';
+      pager.querySelector('.pp-prev').addEventListener('click', function() {{ estado.pagina--; render(); }});
+      pager.querySelector('.pp-next').addEventListener('click', function() {{ estado.pagina++; render(); }});
+    }} else {{
+      document.getElementById(opts.tbodyId).innerHTML = filtrados.map(opts.linhaHtml).join('');
+      pager.innerHTML = '<span>Mostrando ' + filtrados.length + ' de ' + opts.dados.length + ' itens</span>';
+    }}
+    document.querySelectorAll('#' + opts.tableId + ' thead th').forEach(function(th) {{
+      var ind = th.querySelector('.sort-ind');
+      if (ind) ind.remove();
+      if (th.dataset.col === estado.sortCol) {{
+        var span = document.createElement('span');
+        span.className = 'sort-ind';
+        span.textContent = estado.sortDir === 'asc' ? ' ▲' : ' ▼';
+        th.appendChild(span);
+      }}
+    }});
+  }}
+
+  document.getElementById(opts.buscaId).addEventListener('input', function(e) {{
+    estado.filtro = e.target.value;
+    estado.pagina = 1;
+    render();
+  }});
+
+  var msels = opts.filtros.map(function(f) {{
+    return criarMultiSelect(f.id, valoresUnicos(opts.dados, f.campo).map(function(v) {{ return [v, v]; }}), estado.sets[f.campo], function() {{
+      estado.pagina = 1;
+      render();
+    }});
+  }});
+
+  document.getElementById(opts.limparId).addEventListener('click', function() {{
+    estado.filtro = '';
+    document.getElementById(opts.buscaId).value = '';
+    msels.forEach(function(m) {{ m.limpar(); }});
+    estado.pagina = 1;
+    render();
+  }});
+
+  document.querySelectorAll('#' + opts.tableId + ' thead th').forEach(function(th) {{
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', function() {{
+      var col = th.dataset.col;
+      estado.sortDir = (estado.sortCol === col && estado.sortDir === 'asc') ? 'desc' : 'asc';
+      estado.sortCol = col;
+      estado.pagina = 1;
+      render();
+    }});
+  }});
+
+  render();
+}}
 
 // ---- tabela de pedidos (paginada, com muitas linhas nao da pra desenhar tudo de uma vez) ----
 (function() {{
@@ -929,6 +1113,56 @@ document.addEventListener('click', function() {{
   render();
 }})();
 
+// ---- tabelas de acessorios (diversos e fidelizados TIM) ----
+function linhaAcessorioHtml(r) {{
+  return '<tr><td>' + r.filial + '</td><td>' + r.desc + '</td><td>' + r.subgrupo + '</td>' +
+    '<td>' + r.fabricante + '</td><td class="num">' + r.saldo + '</td><td class="num">' + r.disponivel + '</td>' +
+    '<td class="num">' + brlJs(r.valor) + '</td><td class="num">' + brlJs(r.valor_total) + '</td></tr>';
+}}
+
+function brlJs(v) {{
+  return 'R$ ' + v.toLocaleString('pt-BR', {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+}}
+
+var ACESSORIOS_COLS = {{
+  filial: function(r) {{ return r.filial.toLowerCase(); }},
+  desc: function(r) {{ return r.desc.toLowerCase(); }},
+  subgrupo: function(r) {{ return r.subgrupo.toLowerCase(); }},
+  fabricante: function(r) {{ return r.fabricante.toLowerCase(); }},
+  saldo: function(r) {{ return r.saldo; }},
+  disponivel: function(r) {{ return r.disponivel; }},
+  valor: function(r) {{ return r.valor; }},
+  valor_total: function(r) {{ return r.valor_total; }}
+}};
+
+function buscaAcessorio(r) {{ return r.filial + ' ' + r.desc + ' ' + r.fabricante; }}
+
+criarTabelaPaginada({{
+  dados: {acessorios_diversos_json},
+  pageSize: 50, sortInicial: 'saldo',
+  tbodyId: 'tbody-acessorios', pagerId: 'pager-acessorios', tableId: 'tbl-acessorios',
+  buscaId: 'filtro-acessorios', limparId: 'limpar-acessorios',
+  colunas: ACESSORIOS_COLS, linhaHtml: linhaAcessorioHtml, busca: buscaAcessorio,
+  filtros: [
+    {{ id: 'acessorios-filial', campo: 'filial' }},
+    {{ id: 'acessorios-subgrupo', campo: 'subgrupo' }},
+    {{ id: 'acessorios-fabricante', campo: 'fabricante' }}
+  ]
+}});
+
+criarTabelaPaginada({{
+  dados: {acessorios_tim_json},
+  pageSize: 50, sortInicial: 'saldo',
+  tbodyId: 'tbody-acessorios-tim', pagerId: 'pager-acessorios-tim', tableId: 'tbl-acessorios-tim',
+  buscaId: 'filtro-acessorios-tim', limparId: 'limpar-acessorios-tim',
+  colunas: ACESSORIOS_COLS, linhaHtml: linhaAcessorioHtml, busca: buscaAcessorio,
+  filtros: [
+    {{ id: 'acessorios-tim-filial', campo: 'filial' }},
+    {{ id: 'acessorios-tim-subgrupo', campo: 'subgrupo' }},
+    {{ id: 'acessorios-tim-fabricante', campo: 'fabricante' }}
+  ]
+}});
+
 const CHART_DATA = {chart_data_json};
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.borderColor = '#334155';
@@ -1014,10 +1248,32 @@ new Chart(document.getElementById('chart-amet-filial'), {{
     plugins: {{ legend: {{ position: 'bottom' }} }}
   }}
 }});
+
+new Chart(document.getElementById('chart-acessorios-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.acessoriosDiversos.labels,
+    datasets: [{{ label: 'Saldo', data: CHART_DATA.acessoriosDiversos.saldo, backgroundColor: COR_ACCENT }}]
+  }},
+  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+}});
+
+new Chart(document.getElementById('chart-acessorios-tim-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.acessoriosTim.labels,
+    datasets: [{{ label: 'Saldo', data: CHART_DATA.acessoriosTim.saldo, backgroundColor: COR_OK }}]
+  }},
+  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+}});
 </script>
 </body>
 </html>
 """
 
 OUT.write_text(html, encoding="utf-8")
-print(f"OK: {OUT} gerado com {len(notas_atrasadas)} notas atrasadas e {len(transf_todas)} transferências pendentes ({len(transf_criticas)} críticas).")
+print(
+    f"OK: {OUT} gerado com {len(notas_atrasadas)} notas atrasadas, {len(transf_todas)} transferências pendentes "
+    f"({len(transf_criticas)} críticas), {len(acessorios_diversos_itens)} itens de acessórios e "
+    f"{len(acessorios_tim_itens)} itens de acessórios fidelizados TIM."
+)
