@@ -200,13 +200,46 @@ def montar_acessorios(rows):
 
 
 acessorios_diversos_rows = [r for r in acessorios_rows if r[5] == "ACESSORIOS DIVERSOS"]
-acessorios_tim_rows = [r for r in acessorios_rows if r[5] == "ACESSORIOS TIM"]
-
 acessorios_diversos_itens, acessorios_diversos_filiais, acessorios_diversos_resumo = montar_acessorios(acessorios_diversos_rows)
-acessorios_tim_itens, acessorios_tim_filiais, acessorios_tim_resumo = montar_acessorios(acessorios_tim_rows)
-
 acessorios_diversos_json = json.dumps(acessorios_diversos_itens, ensure_ascii=False)
-acessorios_tim_json = json.dumps(acessorios_tim_itens, ensure_ascii=False)
+
+# ------------------------------------- ACESSÓRIOS FIDELIZADOS TIM (com número de série)
+seriais_rows = load("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx", "SERIAIS ACESSÓRIOS FIDELIZADOS")[1:]
+seriais_rows = [r for r in seriais_rows if r[0] is not None]
+
+def faixa_dias_estoque(d):
+    if d <= 30:
+        return "0-30 dias"
+    if d <= 90:
+        return "31-90 dias"
+    if d <= 180:
+        return "91-180 dias"
+    if d <= 365:
+        return "181-365 dias"
+    return "365+ dias"
+
+
+seriais_itens = []
+seriais_por_filial = {}
+for r in seriais_rows:
+    valor = r[12] or 0
+    dias = r[17] if isinstance(r[17], (int, float)) else 0
+    seriais_itens.append({
+        "filial": r[0] or "", "serial": r[1] or "", "produto": (r[3] or "").lstrip("'"),
+        "desc": r[4] or "", "fabricante": r[8] or "-", "data_compra": data_str(r[6]),
+        "dias": dias, "dias_faixa": faixa_dias_estoque(dias), "valor": valor,
+    })
+    seriais_por_filial[r[0]] = seriais_por_filial.get(r[0], 0) + 1
+seriais_itens.sort(key=lambda x: x["dias"], reverse=True)
+seriais_filiais_ordenadas = sorted(seriais_por_filial.items(), key=lambda kv: kv[1], reverse=True)
+
+seriais_resumo = {
+    "itens": len(seriais_itens),
+    "valor_total": sum(i["valor"] for i in seriais_itens),
+    "filiais": len(seriais_por_filial),
+    "dias_medio": round(sum(i["dias"] for i in seriais_itens) / len(seriais_itens), 1) if seriais_itens else 0,
+}
+seriais_json = json.dumps(seriais_itens, ensure_ascii=False)
 
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -251,8 +284,8 @@ chart_data = {
         "saldo": [f[1] for f in acessorios_diversos_filiais],
     },
     "acessoriosTim": {
-        "labels": [f[0] for f in acessorios_tim_filiais],
-        "saldo": [f[1] for f in acessorios_tim_filiais],
+        "labels": [f[0] for f in seriais_filiais_ordenadas],
+        "saldo": [f[1] for f in seriais_filiais_ordenadas],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -367,6 +400,43 @@ def secao_acessorios(id_, titulo, mtime, resumo, prefixo):
   </table>
   </div>
   <div class="pager" id="pager-{prefixo}"></div>
+</section>
+"""
+
+
+def secao_seriais_tim(mtime, resumo):
+    return f"""
+<section id="acessorios-tim">
+  <h2>📶 Acessórios Fidelizados TIM nas Filiais</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {mtime}</p>
+  <div class="cards">
+    <div class="card"><div class="label">Peças (com serial)</div><div class="value">{resumo['itens']}</div></div>
+    <div class="card ok"><div class="label">Valor total em estoque</div><div class="value">{brl(resumo['valor_total'])}</div></div>
+    <div class="card"><div class="label">Filiais com estoque</div><div class="value">{resumo['filiais']}</div></div>
+    <div class="card warn"><div class="label">Dias médio em estoque</div><div class="value">{resumo['dias_medio']:.0f}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box wide"><h4>Peças por filial</h4><div class="canvas-wrap"><canvas id="chart-acessorios-tim-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Peças com número de série</h3>
+  <div class="filtros-pedidos">
+    <input class="filtro" id="filtro-acessorios-tim" placeholder="Buscar por filial, serial, descrição...">
+    <div class="msel" id="msel-acessorios-tim-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-acessorios-tim-fabricante"><button type="button" class="msel-btn" data-default="Todos os fabricantes">Todos os fabricantes</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-acessorios-tim-dias"><button type="button" class="msel-btn" data-default="Dias em estoque (todos)">Dias em estoque (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <button id="limpar-acessorios-tim" type="button">Limpar filtros</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-acessorios-tim">
+    <thead><tr>
+      <th data-col="filial">Filial</th><th data-col="serial">Serial</th><th data-col="desc">Descrição</th>
+      <th data-col="fabricante">Fabricante</th><th data-col="data_compra">Data Compra</th>
+      <th data-col="dias">Dias em Estoque</th><th data-col="valor">Valor</th>
+    </tr></thead>
+    <tbody id="tbody-acessorios-tim"></tbody>
+  </table>
+  </div>
+  <div class="pager" id="pager-acessorios-tim"></div>
 </section>
 """
 
@@ -623,7 +693,7 @@ html = rf"""<!DOCTYPE html>
 </section>
 
 {secao_acessorios("acessorios", "🎧 Acessórios nas Filiais", acessorios_mtime, acessorios_diversos_resumo, "acessorios")}
-{secao_acessorios("acessorios-tim", "📶 Acessórios Fidelizados TIM nas Filiais", acessorios_mtime, acessorios_tim_resumo, "acessorios-tim")}
+{secao_seriais_tim(acessorios_mtime, seriais_resumo)}
 
 </main>
 <footer>Gerado automaticamente a partir das planilhas de controle · Rocha Telecom</footer>
@@ -852,7 +922,8 @@ function criarTabelaPaginada(opts) {{
   }});
 
   var msels = opts.filtros.map(function(f) {{
-    return criarMultiSelect(f.id, valoresUnicos(opts.dados, f.campo).map(function(v) {{ return [v, v]; }}), estado.sets[f.campo], function() {{
+    var pares = f.pares || valoresUnicos(opts.dados, f.campo).map(function(v) {{ return [v, v]; }});
+    return criarMultiSelect(f.id, pares, estado.sets[f.campo], function() {{
       estado.pagina = 1;
       render();
     }});
@@ -1150,16 +1221,39 @@ criarTabelaPaginada({{
   ]
 }});
 
+function linhaSerialHtml(r) {{
+  return '<tr><td>' + r.filial + '</td><td>' + r.serial + '</td><td>' + r.desc + '</td>' +
+    '<td>' + r.fabricante + '</td><td>' + r.data_compra + '</td>' +
+    '<td class="num">' + r.dias + '</td><td class="num">' + brlJs(r.valor) + '</td></tr>';
+}}
+
+var SERIAIS_COLS = {{
+  filial: function(r) {{ return r.filial.toLowerCase(); }},
+  serial: function(r) {{ return r.serial.toLowerCase(); }},
+  desc: function(r) {{ return r.desc.toLowerCase(); }},
+  fabricante: function(r) {{ return r.fabricante.toLowerCase(); }},
+  data_compra: function(r) {{ return r.dias; }},
+  dias: function(r) {{ return r.dias; }},
+  valor: function(r) {{ return r.valor; }}
+}};
+
+function buscaSerial(r) {{ return r.filial + ' ' + r.serial + ' ' + r.desc + ' ' + r.fabricante; }}
+
+var FAIXAS_DIAS_ESTOQUE = [
+  ['0-30 dias', '0-30 dias'], ['31-90 dias', '31-90 dias'], ['91-180 dias', '91-180 dias'],
+  ['181-365 dias', '181-365 dias'], ['365+ dias', '365+ dias']
+];
+
 criarTabelaPaginada({{
-  dados: {acessorios_tim_json},
-  pageSize: 50, sortInicial: 'saldo',
+  dados: {seriais_json},
+  pageSize: 50, sortInicial: 'dias',
   tbodyId: 'tbody-acessorios-tim', pagerId: 'pager-acessorios-tim', tableId: 'tbl-acessorios-tim',
   buscaId: 'filtro-acessorios-tim', limparId: 'limpar-acessorios-tim',
-  colunas: ACESSORIOS_COLS, linhaHtml: linhaAcessorioHtml, busca: buscaAcessorio,
+  colunas: SERIAIS_COLS, linhaHtml: linhaSerialHtml, busca: buscaSerial,
   filtros: [
     {{ id: 'acessorios-tim-filial', campo: 'filial' }},
-    {{ id: 'acessorios-tim-subgrupo', campo: 'subgrupo' }},
-    {{ id: 'acessorios-tim-fabricante', campo: 'fabricante' }}
+    {{ id: 'acessorios-tim-fabricante', campo: 'fabricante' }},
+    {{ id: 'acessorios-tim-dias', campo: 'dias_faixa', pares: FAIXAS_DIAS_ESTOQUE }}
   ]
 }});
 
@@ -1275,5 +1369,5 @@ OUT.write_text(html, encoding="utf-8")
 print(
     f"OK: {OUT} gerado com {len(notas_atrasadas)} notas atrasadas, {len(transf_todas)} transferências pendentes "
     f"({len(transf_criticas)} críticas), {len(acessorios_diversos_itens)} itens de acessórios e "
-    f"{len(acessorios_tim_itens)} itens de acessórios fidelizados TIM."
+    f"{len(seriais_itens)} peças com serial de acessórios fidelizados TIM."
 )
