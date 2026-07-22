@@ -255,6 +255,34 @@ seriais_resumo = {
 }
 seriais_json = json.dumps(seriais_itens, ensure_ascii=False)
 
+# ---------------------------------------------- DEVOLVIDOS E DEFEITOS
+devolvidos_mtime = mtime_str("CONTROLE DEVOLVIDOS E DEFEITOS.xlsx")
+devolvidos_rows = load_dicts("CONTROLE DEVOLVIDOS E DEFEITOS.xlsx", "DEVOLVIDOS E DEFEITOS")
+devolvidos_rows = [r for r in devolvidos_rows if r.get("Filial") is not None]
+
+devolvidos_itens = []
+devolvidos_por_filial = {}
+for r in devolvidos_rows:
+    filial = r.get("Filial") or ""
+    saldo = r.get("Saldo") or 0
+    custo = r.get("Custo Movimento") or r.get("Custo Padrão") or 0
+    devolvidos_itens.append({
+        "filial": filial, "desc": r.get("Descrição") or "", "grupo": r.get("Grupo Estoque") or "-",
+        "fabricante": r.get("Fabricante") or "-", "saldo": saldo, "custo": custo,
+        "custo_total": round(saldo * custo, 2), "data_mov": data_str(r.get("Data Movimento")),
+    })
+    devolvidos_por_filial[filial] = devolvidos_por_filial.get(filial, 0) + saldo
+devolvidos_itens.sort(key=lambda x: x["saldo"], reverse=True)
+devolvidos_filiais_ordenadas = sorted(devolvidos_por_filial.items(), key=lambda kv: kv[1], reverse=True)
+
+devolvidos_resumo = {
+    "itens": len(devolvidos_itens),
+    "saldo_total": sum(i["saldo"] for i in devolvidos_itens),
+    "custo_total": sum(i["custo_total"] for i in devolvidos_itens),
+    "filiais": len(devolvidos_por_filial),
+}
+devolvidos_json = json.dumps(devolvidos_itens, ensure_ascii=False)
+
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
 chart_data = {
@@ -300,6 +328,10 @@ chart_data = {
     "acessoriosTim": {
         "labels": [f[0] for f in seriais_filiais_ordenadas],
         "saldo": [f[1] for f in seriais_filiais_ordenadas],
+    },
+    "devolvidos": {
+        "labels": [f[0] for f in devolvidos_filiais_ordenadas],
+        "saldo": [f[1] for f in devolvidos_filiais_ordenadas],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -455,6 +487,43 @@ def secao_seriais_tim(mtime, resumo):
 """
 
 
+def secao_devolvidos(mtime, resumo):
+    return f"""
+<section id="devolvidos">
+  <h2>♻️ Devolvidos e Defeitos nas Filiais</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {mtime}</p>
+  <div class="cards">
+    <div class="card"><div class="label">Itens (linhas de estoque)</div><div class="value">{resumo['itens']}</div></div>
+    <div class="card bad"><div class="label">Saldo total (unidades)</div><div class="value">{resumo['saldo_total']}</div></div>
+    <div class="card"><div class="label">Custo total imobilizado</div><div class="value">{brl(resumo['custo_total'])}</div></div>
+    <div class="card"><div class="label">Filiais com devolução/defeito</div><div class="value">{resumo['filiais']}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box wide"><h4>Saldo por filial</h4><div class="canvas-wrap"><canvas id="chart-devolvidos-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Itens devolvidos / com defeito</h3>
+  <div class="filtros-pedidos">
+    <input class="filtro" id="filtro-devolvidos" placeholder="Buscar por filial, descrição...">
+    <div class="msel" id="msel-devolvidos-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-devolvidos-grupo"><button type="button" class="msel-btn" data-default="Todas as categorias">Todas as categorias</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-devolvidos-fabricante"><button type="button" class="msel-btn" data-default="Todos os fabricantes">Todos os fabricantes</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <button id="limpar-devolvidos" type="button">Limpar filtros</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-devolvidos">
+    <thead><tr>
+      <th data-col="filial">Filial</th><th data-col="desc">Descrição</th><th data-col="grupo">Categoria</th>
+      <th data-col="fabricante">Fabricante</th><th data-col="saldo">Saldo</th><th data-col="custo">Custo Unit.</th>
+      <th data-col="custo_total">Custo Total</th><th data-col="data_mov">Última Movimentação</th>
+    </tr></thead>
+    <tbody id="tbody-devolvidos"></tbody>
+  </table>
+  </div>
+  <div class="pager" id="pager-devolvidos"></div>
+</section>
+"""
+
+
 html = rf"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -555,6 +624,7 @@ html = rf"""<!DOCTYPE html>
   <a href="#amet" class="nav-link">🛡️ Películas AMET</a>
   <a href="#acessorios" class="nav-link">🎧 Acessórios</a>
   <a href="#acessorios-tim" class="nav-link">📶 Fidelizados TIM</a>
+  <a href="#devolvidos" class="nav-link">♻️ Devolvidos e Defeitos</a>
 </nav>
 <div class="content">
 <header>
@@ -708,6 +778,7 @@ html = rf"""<!DOCTYPE html>
 
 {secao_acessorios("acessorios", "🎧 Acessórios nas Filiais", acessorios_mtime, acessorios_diversos_resumo, "acessorios")}
 {secao_seriais_tim(acessorios_mtime, seriais_resumo)}
+{secao_devolvidos(devolvidos_mtime, devolvidos_resumo)}
 
 </main>
 <footer>Gerado automaticamente a partir das planilhas de controle · Rocha Telecom</footer>
@@ -1271,6 +1342,39 @@ criarTabelaPaginada({{
   ]
 }});
 
+// ---- tabela de devolvidos e defeitos ----
+function linhaDevolvidoHtml(r) {{
+  return '<tr><td>' + r.filial + '</td><td>' + r.desc + '</td><td>' + r.grupo + '</td>' +
+    '<td>' + r.fabricante + '</td><td class="num">' + r.saldo + '</td><td class="num">' + brlJs(r.custo) + '</td>' +
+    '<td class="num">' + brlJs(r.custo_total) + '</td><td>' + r.data_mov + '</td></tr>';
+}}
+
+var DEVOLVIDOS_COLS = {{
+  filial: function(r) {{ return r.filial.toLowerCase(); }},
+  desc: function(r) {{ return r.desc.toLowerCase(); }},
+  grupo: function(r) {{ return r.grupo.toLowerCase(); }},
+  fabricante: function(r) {{ return r.fabricante.toLowerCase(); }},
+  saldo: function(r) {{ return r.saldo; }},
+  custo: function(r) {{ return r.custo; }},
+  custo_total: function(r) {{ return r.custo_total; }},
+  data_mov: function(r) {{ return r.data_mov; }}
+}};
+
+function buscaDevolvido(r) {{ return r.filial + ' ' + r.desc + ' ' + r.fabricante; }}
+
+criarTabelaPaginada({{
+  dados: {devolvidos_json},
+  pageSize: null, sortInicial: 'saldo',
+  tbodyId: 'tbody-devolvidos', pagerId: 'pager-devolvidos', tableId: 'tbl-devolvidos',
+  buscaId: 'filtro-devolvidos', limparId: 'limpar-devolvidos',
+  colunas: DEVOLVIDOS_COLS, linhaHtml: linhaDevolvidoHtml, busca: buscaDevolvido,
+  filtros: [
+    {{ id: 'devolvidos-filial', campo: 'filial' }},
+    {{ id: 'devolvidos-grupo', campo: 'grupo' }},
+    {{ id: 'devolvidos-fabricante', campo: 'fabricante' }}
+  ]
+}});
+
 const CHART_DATA = {chart_data_json};
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.borderColor = '#334155';
@@ -1374,6 +1478,15 @@ new Chart(document.getElementById('chart-acessorios-tim-filial'), {{
   }},
   options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
 }});
+
+new Chart(document.getElementById('chart-devolvidos-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.devolvidos.labels,
+    datasets: [{{ label: 'Saldo', data: CHART_DATA.devolvidos.saldo, backgroundColor: COR_BAD }}]
+  }},
+  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+}});
 </script>
 </body>
 </html>
@@ -1382,6 +1495,7 @@ new Chart(document.getElementById('chart-acessorios-tim-filial'), {{
 OUT.write_text(html, encoding="utf-8")
 print(
     f"OK: {OUT} gerado com {len(notas_atrasadas)} notas atrasadas, {len(transf_todas)} transferências pendentes "
-    f"({len(transf_criticas)} críticas), {len(acessorios_diversos_itens)} itens de acessórios e "
-    f"{len(seriais_itens)} peças com serial de acessórios fidelizados TIM."
+    f"({len(transf_criticas)} críticas), {len(acessorios_diversos_itens)} itens de acessórios, "
+    f"{len(seriais_itens)} peças com serial de acessórios fidelizados TIM e "
+    f"{len(devolvidos_itens)} itens devolvidos/com defeito."
 )
