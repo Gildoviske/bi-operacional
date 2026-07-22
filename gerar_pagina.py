@@ -30,6 +30,15 @@ def load(arquivo, aba):
     return list(wb[aba].iter_rows(values_only=True))
 
 
+def load_dicts(arquivo, aba):
+    """Lê a aba usando a 1ª linha como cabeçalho e devolve dicts (nome da coluna -> valor).
+    Mais robusto que acessar por índice fixo: continua funcionando mesmo se colunas
+    forem inseridas/removidas/reordenadas na planilha."""
+    linhas = load(arquivo, aba)
+    header = [(h or f"_col{i}").strip() if isinstance(h, str) else (h or f"_col{i}") for i, h in enumerate(linhas[0])]
+    return [dict(zip(header, r)) for r in linhas[1:]]
+
+
 def mtime_str(arquivo):
     ts = (BASE / arquivo).stat().st_mtime
     return datetime.fromtimestamp(ts).strftime("%d/%m/%Y às %H:%M")
@@ -172,22 +181,23 @@ amet_vendido_total = sum(amet_vendido_por_filial.values())
 
 # ------------------------------------------------------- ACESSÓRIOS
 acessorios_mtime = mtime_str("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx")
-acessorios_rows = load("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx", "SALDO PRODUTOS NAS FILIAIS")[1:]
-acessorios_rows = [r for r in acessorios_rows if r[0] is not None]
+acessorios_rows = load_dicts("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx", "SALDO PRODUTOS NAS FILIAIS")
+acessorios_rows = [r for r in acessorios_rows if r.get("Filial") is not None]
 
 
 def montar_acessorios(rows):
     itens = []
     saldo_por_filial = {}
     for r in rows:
-        saldo = r[12] or 0
-        valor = r[20] or 0
+        filial = r.get("Filial") or ""
+        saldo = r.get("Saldo") or 0
+        valor = r.get("VALOR DE VENDA") or 0
         itens.append({
-            "filial": r[0] or "", "desc": r[3] or "", "subgrupo": r[6] or "-",
-            "fabricante": r[8] or "-", "saldo": saldo, "disponivel": r[16] or 0,
+            "filial": filial, "desc": r.get("Descrição") or "", "subgrupo": r.get("Sub Grupo Estoque") or "-",
+            "fabricante": r.get("Fabricante") or "-", "saldo": saldo, "disponivel": r.get("Disponível") or 0,
             "valor": valor, "valor_total": round(saldo * valor, 2),
         })
-        saldo_por_filial[r[0]] = saldo_por_filial.get(r[0], 0) + saldo
+        saldo_por_filial[filial] = saldo_por_filial.get(filial, 0) + saldo
     itens.sort(key=lambda x: x["saldo"], reverse=True)
     filiais_ordenadas = sorted(saldo_por_filial.items(), key=lambda kv: kv[1], reverse=True)
     resumo = {
@@ -199,13 +209,14 @@ def montar_acessorios(rows):
     return itens, filiais_ordenadas, resumo
 
 
-acessorios_diversos_rows = [r for r in acessorios_rows if r[5] == "ACESSORIOS DIVERSOS"]
+acessorios_diversos_rows = [r for r in acessorios_rows if r.get("Grupo Estoque") == "ACESSORIOS DIVERSOS"]
 acessorios_diversos_itens, acessorios_diversos_filiais, acessorios_diversos_resumo = montar_acessorios(acessorios_diversos_rows)
 acessorios_diversos_json = json.dumps(acessorios_diversos_itens, ensure_ascii=False)
 
 # ------------------------------------- ACESSÓRIOS FIDELIZADOS TIM (com número de série)
-seriais_rows = load("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx", "SERIAIS ACESSÓRIOS FIDELIZADOS")[1:]
-seriais_rows = [r for r in seriais_rows if r[0] is not None]
+seriais_rows = load_dicts("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx", "SERIAIS ACESSÓRIOS FIDELIZADOS")
+seriais_rows = [r for r in seriais_rows if r.get("Filial Atual") is not None]
+
 
 def faixa_dias_estoque(d):
     if d <= 30:
@@ -222,14 +233,17 @@ def faixa_dias_estoque(d):
 seriais_itens = []
 seriais_por_filial = {}
 for r in seriais_rows:
-    valor = r[12] or 0
-    dias = r[17] if isinstance(r[17], (int, float)) else 0
+    filial = r.get("Filial Atual") or ""
+    valor = r.get("Valor Venda") or 0
+    dias_val = r.get("Dias em Estoque")
+    dias = dias_val if isinstance(dias_val, (int, float)) else 0
+    produto = r.get("Produto") or ""
     seriais_itens.append({
-        "filial": r[0] or "", "serial": r[1] or "", "produto": (r[3] or "").lstrip("'"),
-        "desc": r[4] or "", "fabricante": r[8] or "-", "data_compra": data_str(r[6]),
+        "filial": filial, "serial": r.get("Serial") or "", "produto": produto.lstrip("'") if isinstance(produto, str) else produto,
+        "desc": r.get("Descricao") or "", "fabricante": r.get("Fabricante") or "-", "data_compra": data_str(r.get("Data Compra")),
         "dias": dias, "dias_faixa": faixa_dias_estoque(dias), "valor": valor,
     })
-    seriais_por_filial[r[0]] = seriais_por_filial.get(r[0], 0) + 1
+    seriais_por_filial[filial] = seriais_por_filial.get(filial, 0) + 1
 seriais_itens.sort(key=lambda x: x["dias"], reverse=True)
 seriais_filiais_ordenadas = sorted(seriais_por_filial.items(), key=lambda kv: kv[1], reverse=True)
 
