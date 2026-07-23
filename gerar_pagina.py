@@ -193,8 +193,9 @@ def montar_acessorios(rows):
         saldo = r.get("Saldo") or 0
         valor = r.get("VALOR DE VENDA") or 0
         itens.append({
-            "filial": filial, "desc": r.get("Descrição") or "", "subgrupo": r.get("Sub Grupo Estoque") or "-",
-            "fabricante": r.get("Fabricante") or "-", "saldo": saldo, "disponivel": r.get("Disponível") or 0,
+            "filial": filial, "ref": r.get("Produto") or "", "desc": r.get("Descrição") or "",
+            "subgrupo": r.get("Sub Grupo Estoque") or "-", "fabricante": r.get("Fabricante") or "-",
+            "saldo": saldo, "disponivel": r.get("Disponível") or 0,
             "valor": valor, "valor_total": round(saldo * valor, 2),
         })
         saldo_por_filial[filial] = saldo_por_filial.get(filial, 0) + saldo
@@ -429,7 +430,7 @@ def secao_acessorios(id_, titulo, mtime, resumo, prefixo):
   </div>
   <h3>📋 Itens em estoque por filial</h3>
   <div class="filtros-pedidos">
-    <input class="filtro" id="filtro-{prefixo}" placeholder="Buscar por filial, descrição...">
+    <input class="filtro" id="filtro-{prefixo}" placeholder="Buscar por filial, referência, descrição...">
     <div class="msel" id="msel-{prefixo}-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <div class="msel" id="msel-{prefixo}-subgrupo"><button type="button" class="msel-btn" data-default="Todos os tipos">Todos os tipos</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <div class="msel" id="msel-{prefixo}-fabricante"><button type="button" class="msel-btn" data-default="Todos os fabricantes">Todos os fabricantes</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
@@ -438,7 +439,7 @@ def secao_acessorios(id_, titulo, mtime, resumo, prefixo):
   <div class="table-wrap">
   <table id="tbl-{prefixo}">
     <thead><tr>
-      <th data-col="filial">Filial</th><th data-col="desc">Descrição</th><th data-col="subgrupo">Tipo</th>
+      <th data-col="filial">Filial</th><th data-col="ref">Referência</th><th data-col="desc">Descrição</th><th data-col="subgrupo">Tipo</th>
       <th data-col="fabricante">Fabricante</th><th data-col="saldo">Saldo</th><th data-col="disponivel">Disponível</th>
       <th data-col="valor">Valor Unit.</th><th data-col="valor_total">Valor Total</th>
     </tr></thead>
@@ -1271,7 +1272,7 @@ function criarTabelaPaginada(opts) {{
 
 // ---- tabelas de acessorios (diversos e fidelizados TIM) ----
 function linhaAcessorioHtml(r) {{
-  return '<tr><td>' + r.filial + '</td><td>' + r.desc + '</td><td>' + r.subgrupo + '</td>' +
+  return '<tr><td>' + r.filial + '</td><td>' + r.ref + '</td><td>' + r.desc + '</td><td>' + r.subgrupo + '</td>' +
     '<td>' + r.fabricante + '</td><td class="num">' + r.saldo + '</td><td class="num">' + r.disponivel + '</td>' +
     '<td class="num">' + brlJs(r.valor) + '</td><td class="num">' + brlJs(r.valor_total) + '</td></tr>';
 }}
@@ -1282,6 +1283,7 @@ function brlJs(v) {{
 
 var ACESSORIOS_COLS = {{
   filial: function(r) {{ return r.filial.toLowerCase(); }},
+  ref: function(r) {{ return r.ref.toLowerCase(); }},
   desc: function(r) {{ return r.desc.toLowerCase(); }},
   subgrupo: function(r) {{ return r.subgrupo.toLowerCase(); }},
   fabricante: function(r) {{ return r.fabricante.toLowerCase(); }},
@@ -1291,7 +1293,7 @@ var ACESSORIOS_COLS = {{
   valor_total: function(r) {{ return r.valor_total; }}
 }};
 
-function buscaAcessorio(r) {{ return r.filial + ' ' + r.desc + ' ' + r.fabricante; }}
+function buscaAcessorio(r) {{ return r.filial + ' ' + r.ref + ' ' + r.desc + ' ' + r.fabricante; }}
 
 criarTabelaPaginada({{
   dados: {acessorios_diversos_json},
