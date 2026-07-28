@@ -6,6 +6,7 @@
 <title>BI Operacional — Rocha Telecom</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2714%27%20fill%3D%27%230f172a%27/%3E%3Crect%20x%3D%2713%27%20y%3D%2734%27%20width%3D%2710%27%20height%3D%2718%27%20rx%3D%272%27%20fill%3D%27%2338bdf8%27/%3E%3Crect%20x%3D%2727%27%20y%3D%2722%27%20width%3D%2710%27%20height%3D%2730%27%20rx%3D%272%27%20fill%3D%27%2322c55e%27/%3E%3Crect%20x%3D%2741%27%20y%3D%2712%27%20width%3D%2710%27%20height%3D%2740%27%20rx%3D%272%27%20fill%3D%27%23f59e0b%27/%3E%3C/svg%3E">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #0f172a; --card: #1e293b; --card2: #16213a; --text: #e2e8f0; --muted: #94a3b8;
@@ -61,6 +62,12 @@
   .pager { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
   .pager button { background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
   .pager button:disabled { opacity: .4; cursor: default; }
+  .chart-box h4 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .chart-export-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 2px 7px; font-size: 12px; cursor: pointer; line-height: 1.6; }
+  .chart-export-btn:hover { color: var(--text); border-color: var(--accent); }
+  .table-export-btn { background: var(--ok); border: 1px solid var(--ok); color: #06210f; border-radius: 6px; padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 13px; }
+  .table-export-btn:hover { filter: brightness(1.1); }
+  .table-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
   tr:hover td { background: #22314f; }
   .table-wrap { max-height: 480px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
   .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 20px; }
@@ -108,7 +115,7 @@
   </div>
   <div class="badge-atualizacao">
     <div class="data">🕒 Atualizado em 28/07/2026</div>
-    <div class="gerado">Página gerada em 28/07/2026 08:27</div>
+    <div class="gerado">Página gerada em 28/07/2026 09:40</div>
   </div>
 </header>
 <main>
@@ -125,12 +132,15 @@
     <div class="card warn"><div class="label">Entrada pendente no sistema</div><div class="value">818</div><div class="sub">32,5%</div></div>
   </div>
   <div class="charts">
-    <div class="chart-box"><h4>Status geral dos pedidos</h4><div class="canvas-wrap"><canvas id="chart-pedidos-status"></canvas></div></div>
-    <div class="chart-box"><h4>Entrada no sistema</h4><div class="canvas-wrap"><canvas id="chart-pedidos-entrada"></canvas></div></div>
-    <div class="chart-box wide"><h4>Pedidos por filial (entregue / pendente / atrasado)</h4><div class="canvas-wrap"><canvas id="chart-pedidos-filial"></canvas></div></div>
+    <div class="chart-box"><h4>Status geral dos pedidos <button class="chart-export-btn" data-chart-export="chart-pedidos-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-pedidos-status"></canvas></div></div>
+    <div class="chart-box"><h4>Entrada no sistema <button class="chart-export-btn" data-chart-export="chart-pedidos-entrada" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-pedidos-entrada"></canvas></div></div>
+    <div class="chart-box wide"><h4>Pedidos por filial (entregue / pendente / atrasado) <button class="chart-export-btn" data-chart-export="chart-pedidos-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-pedidos-filial"></canvas></div></div>
   </div>
   <h3>📋 Pedidos por filial</h3>
-  <input class="filtro" data-target="tbl-pedidos-filial" placeholder="Filtrar por filial...">
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-pedidos-filial" placeholder="Filtrar por filial...">
+    <button class="table-export-btn" data-export="tbl-pedidos-filial">📥 Exportar Excel</button>
+  </div>
   <div class="table-wrap">
   <table id="tbl-pedidos-filial" class="sortable">
     <thead><tr><th>Filial</th><th>Total</th><th>Entregue</th><th>Pendente</th><th>Atrasado</th><th>% Entregue</th></tr></thead>
@@ -173,6 +183,7 @@
     <div class="msel" id="msel-entrada"><button type="button" class="msel-btn" data-default="Entrada no sistema (todos)">Entrada no sistema (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <div class="msel" id="msel-dias"><button type="button" class="msel-btn" data-default="Dias em aberto (todos)">Dias em aberto (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <button id="limpar-filtros-pedidos" type="button">Limpar filtros</button>
+    <button class="table-export-btn" data-export="tbl-pedidos-detalhe">📥 Exportar Excel</button>
   </div>
   <div class="table-wrap">
   <table id="tbl-pedidos-detalhe">
@@ -200,10 +211,13 @@
     <div class="card"><div class="label">Média de atraso</div><div class="value">18.4 dias</div></div>
   </div>
   <div class="charts">
-    <div class="chart-box"><h4>Notas pendentes: atrasadas x no prazo</h4><div class="canvas-wrap"><canvas id="chart-notas-status"></canvas></div></div>
+    <div class="chart-box"><h4>Notas pendentes: atrasadas x no prazo <button class="chart-export-btn" data-chart-export="chart-notas-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-notas-status"></canvas></div></div>
   </div>
   <h3>⚠️ Notas com criticidade elevada (atrasadas)</h3>
-  <input class="filtro" data-target="tbl-notas" placeholder="Filtrar por filial, NF ou produto...">
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-notas" placeholder="Filtrar por filial, NF ou produto...">
+    <button class="table-export-btn" data-export="tbl-notas">📥 Exportar Excel</button>
+  </div>
   <div class="table-wrap">
   <table id="tbl-notas" class="sortable">
     <thead><tr><th>Filial</th><th>Nota Fiscal</th><th>Descrição</th><th>Qtde</th><th>Dia da Entrega</th><th>Dias em Atraso</th></tr></thead>
@@ -277,8 +291,8 @@
     <div class="card bad"><div class="label">Crítico</div><div class="value">3</div></div>
   </div>
   <div class="charts">
-    <div class="chart-box"><h4>Transferências por criticidade</h4><div class="canvas-wrap"><canvas id="chart-transf-status"></canvas></div></div>
-    <div class="chart-box"><h4>Tempo fora do estoque</h4><div class="canvas-wrap"><canvas id="chart-transf-prazo"></canvas></div></div>
+    <div class="chart-box"><h4>Transferências por criticidade <button class="chart-export-btn" data-chart-export="chart-transf-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-transf-status"></canvas></div></div>
+    <div class="chart-box"><h4>Tempo fora do estoque <button class="chart-export-btn" data-chart-export="chart-transf-prazo" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-transf-prazo"></canvas></div></div>
   </div>
   <h3>📋 Todas as transferências pendentes</h3>
   <div class="filtros-pedidos">
@@ -289,6 +303,7 @@
     <div class="msel" id="msel-tprazo"><button type="button" class="msel-btn" data-default="Status de prazo (todos)">Status de prazo (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <div class="msel" id="msel-tdias"><button type="button" class="msel-btn" data-default="Dias fora do estoque (todos)">Dias fora do estoque (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <button id="limpar-filtros-transf" type="button">Limpar filtros</button>
+    <button class="table-export-btn" data-export="tbl-transf">📥 Exportar Excel</button>
   </div>
   <div class="table-wrap">
   <table id="tbl-transf">
@@ -312,10 +327,13 @@
     <div class="card"><div class="label">Filiais monitoradas</div><div class="value">24</div></div>
   </div>
   <div class="charts">
-    <div class="chart-box wide"><h4>Estoque x Vendido por filial</h4><div class="canvas-wrap"><canvas id="chart-amet-filial"></canvas></div></div>
+    <div class="chart-box wide"><h4>Estoque x Vendido por filial <button class="chart-export-btn" data-chart-export="chart-amet-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-amet-filial"></canvas></div></div>
   </div>
   <h3>📋 Estoque e vendas por filial</h3>
-  <input class="filtro" data-target="tbl-amet" placeholder="Filtrar por filial...">
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-amet" placeholder="Filtrar por filial...">
+    <button class="table-export-btn" data-export="tbl-amet">📥 Exportar Excel</button>
+  </div>
   <div class="table-wrap">
   <table id="tbl-amet" class="sortable">
     <thead><tr><th>Filial</th><th>Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
@@ -360,7 +378,7 @@
     <div class="card"><div class="label">Filiais com estoque</div><div class="value">35</div></div>
   </div>
   <div class="charts">
-    <div class="chart-box wide"><h4>Saldo por filial</h4><div class="canvas-wrap"><canvas id="chart-acessorios-filial"></canvas></div></div>
+    <div class="chart-box wide"><h4>Saldo por filial <button class="chart-export-btn" data-chart-export="chart-acessorios-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-acessorios-filial"></canvas></div></div>
   </div>
   <h3>📋 Itens em estoque por filial</h3>
   <div class="filtros-pedidos">
@@ -369,6 +387,7 @@
     <div class="msel" id="msel-acessorios-subgrupo"><button type="button" class="msel-btn" data-default="Todos os tipos">Todos os tipos</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <div class="msel" id="msel-acessorios-fabricante"><button type="button" class="msel-btn" data-default="Todos os fabricantes">Todos os fabricantes</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <button id="limpar-acessorios" type="button">Limpar filtros</button>
+    <button class="table-export-btn" data-export="tbl-acessorios">📥 Exportar Excel</button>
   </div>
   <div class="table-wrap">
   <table id="tbl-acessorios">
@@ -394,7 +413,7 @@
     <div class="card warn"><div class="label">Dias médio em estoque</div><div class="value">211</div></div>
   </div>
   <div class="charts">
-    <div class="chart-box wide"><h4>Peças por filial</h4><div class="canvas-wrap"><canvas id="chart-acessorios-tim-filial"></canvas></div></div>
+    <div class="chart-box wide"><h4>Peças por filial <button class="chart-export-btn" data-chart-export="chart-acessorios-tim-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-acessorios-tim-filial"></canvas></div></div>
   </div>
   <h3>📋 Peças com número de série</h3>
   <div class="filtros-pedidos">
@@ -403,6 +422,7 @@
     <div class="msel" id="msel-acessorios-tim-fabricante"><button type="button" class="msel-btn" data-default="Todos os fabricantes">Todos os fabricantes</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <div class="msel" id="msel-acessorios-tim-dias"><button type="button" class="msel-btn" data-default="Dias em estoque (todos)">Dias em estoque (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <button id="limpar-acessorios-tim" type="button">Limpar filtros</button>
+    <button class="table-export-btn" data-export="tbl-acessorios-tim">📥 Exportar Excel</button>
   </div>
   <div class="table-wrap">
   <table id="tbl-acessorios-tim">
@@ -428,7 +448,7 @@
     <div class="card"><div class="label">Filiais com devolução/defeito</div><div class="value">8</div></div>
   </div>
   <div class="charts">
-    <div class="chart-box wide"><h4>Saldo por filial</h4><div class="canvas-wrap"><canvas id="chart-devolvidos-filial"></canvas></div></div>
+    <div class="chart-box wide"><h4>Saldo por filial <button class="chart-export-btn" data-chart-export="chart-devolvidos-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-devolvidos-filial"></canvas></div></div>
   </div>
   <h3>📋 Itens devolvidos / com defeito</h3>
   <div class="filtros-pedidos">
@@ -437,6 +457,7 @@
     <div class="msel" id="msel-devolvidos-grupo"><button type="button" class="msel-btn" data-default="Todas as categorias">Todas as categorias</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <div class="msel" id="msel-devolvidos-fabricante"><button type="button" class="msel-btn" data-default="Todos os fabricantes">Todos os fabricantes</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <button id="limpar-devolvidos" type="button">Limpar filtros</button>
+    <button class="table-export-btn" data-export="tbl-devolvidos">📥 Exportar Excel</button>
   </div>
   <div class="table-wrap">
   <table id="tbl-devolvidos">
@@ -615,6 +636,50 @@ document.addEventListener('click', function() {
   document.querySelectorAll('.msel.open').forEach(function(m) { m.classList.remove('open'); });
 });
 
+// ---- exportacao: graficos como PNG, tabelas como Excel (.xlsx) ----
+var EXPORTADORES = {};
+
+function registrarExportDOM(tableId) {
+  EXPORTADORES[tableId] = function() {
+    var table = document.getElementById(tableId);
+    var headers = Array.prototype.map.call(table.querySelectorAll('thead th'), function(th) {
+      return (th.childNodes[0] ? th.childNodes[0].textContent : th.textContent).trim();
+    });
+    var linhas = Array.prototype.filter.call(table.querySelectorAll('tbody tr'), function(tr) {
+      return tr.style.display !== 'none';
+    }).map(function(tr) {
+      return Array.prototype.map.call(tr.children, function(td) { return td.textContent.trim(); });
+    });
+    return [headers].concat(linhas);
+  };
+}
+
+function exportarAOA(aoa, nomeArquivo) {
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+  XLSX.writeFile(wb, nomeArquivo.replace(/^tbl-/, '') + '.xlsx');
+}
+
+document.addEventListener('click', function(e) {
+  var expBtn = e.target.closest('[data-export]');
+  if (expBtn) {
+    var tableId = expBtn.dataset.export;
+    var fn = EXPORTADORES[tableId];
+    if (fn) exportarAOA(fn(), tableId);
+  }
+  var chartBtn = e.target.closest('[data-chart-export]');
+  if (chartBtn) {
+    var canvas = document.getElementById(chartBtn.dataset.chartExport);
+    var link = document.createElement('a');
+    link.download = chartBtn.dataset.chartExport.replace(/^chart-/, '') + '.png';
+    link.href = canvas.toDataURL('image/png', 1.0);
+    link.click();
+  }
+});
+
+['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-transf'].forEach(registrarExportDOM);
+
 // ---- fabrica generica de tabela paginada com busca + multi-selecao, usada pelas tabelas de acessorios ----
 function criarTabelaPaginada(opts) {
   var estado = { filtro: '', sortCol: opts.sortInicial || null, sortDir: 'desc', pagina: 1, sets: {} };
@@ -704,6 +769,15 @@ function criarTabelaPaginada(opts) {
       render();
     });
   });
+
+  if (opts.colunasExport) {
+    EXPORTADORES[opts.tableId] = function() {
+      var filtrados = dadosFiltrados();
+      var headers = opts.colunasExport.map(function(c) { return c.label; });
+      var linhas = filtrados.map(function(r) { return opts.colunasExport.map(function(c) { return c.get(r); }); });
+      return [headers].concat(linhas);
+    };
+  }
 
   render();
 }
@@ -830,6 +904,14 @@ function criarTabelaPaginada(opts) {
       render();
     });
   });
+
+  EXPORTADORES['tbl-pedidos-detalhe'] = function() {
+    var headers = ['Data Realização', 'Data Processamento', 'Data Prevista Entrega', 'Filial Destino', 'Nº Pedido GN', 'Qtde', 'Descrição do Produto', 'Status do Produto', 'Dias em Aberto', 'Entrada no Sistema', 'Status'];
+    var linhas = dadosFiltrados().map(function(r) {
+      return [r.dreal, r.dproc, r.dprev, r.fil, r.ped, r.qtd, r.desc, r.stprod, r.dias, r.entrada, r.status];
+    });
+    return [headers].concat(linhas);
+  };
 
   render();
 })();
@@ -976,6 +1058,17 @@ criarTabelaPaginada({
     { id: 'acessorios-filial', campo: 'filial' },
     { id: 'acessorios-subgrupo', campo: 'subgrupo' },
     { id: 'acessorios-fabricante', campo: 'fabricante' }
+  ],
+  colunasExport: [
+    { label: 'Filial', get: function(r) { return r.filial; } },
+    { label: 'Referência', get: function(r) { return r.ref; } },
+    { label: 'Descrição', get: function(r) { return r.desc; } },
+    { label: 'Tipo', get: function(r) { return r.subgrupo; } },
+    { label: 'Fabricante', get: function(r) { return r.fabricante; } },
+    { label: 'Saldo', get: function(r) { return r.saldo; } },
+    { label: 'Disponível', get: function(r) { return r.disponivel; } },
+    { label: 'Valor Unit.', get: function(r) { return r.valor; } },
+    { label: 'Valor Total', get: function(r) { return r.valor_total; } }
   ]
 });
 
@@ -1012,6 +1105,15 @@ criarTabelaPaginada({
     { id: 'acessorios-tim-filial', campo: 'filial' },
     { id: 'acessorios-tim-fabricante', campo: 'fabricante' },
     { id: 'acessorios-tim-dias', campo: 'dias_faixa', pares: FAIXAS_DIAS_ESTOQUE }
+  ],
+  colunasExport: [
+    { label: 'Filial', get: function(r) { return r.filial; } },
+    { label: 'Serial', get: function(r) { return r.serial; } },
+    { label: 'Descrição', get: function(r) { return r.desc; } },
+    { label: 'Fabricante', get: function(r) { return r.fabricante; } },
+    { label: 'Data Compra', get: function(r) { return r.data_compra; } },
+    { label: 'Dias em Estoque', get: function(r) { return r.dias; } },
+    { label: 'Valor', get: function(r) { return r.valor; } }
   ]
 });
 
@@ -1045,6 +1147,16 @@ criarTabelaPaginada({
     { id: 'devolvidos-filial', campo: 'filial' },
     { id: 'devolvidos-grupo', campo: 'grupo' },
     { id: 'devolvidos-fabricante', campo: 'fabricante' }
+  ],
+  colunasExport: [
+    { label: 'Filial', get: function(r) { return r.filial; } },
+    { label: 'Descrição', get: function(r) { return r.desc; } },
+    { label: 'Categoria', get: function(r) { return r.grupo; } },
+    { label: 'Fabricante', get: function(r) { return r.fabricante; } },
+    { label: 'Saldo', get: function(r) { return r.saldo; } },
+    { label: 'Custo Unit.', get: function(r) { return r.custo; } },
+    { label: 'Custo Total', get: function(r) { return r.custo_total; } },
+    { label: 'Última Movimentação', get: function(r) { return r.data_mov; } }
   ]
 });
 
