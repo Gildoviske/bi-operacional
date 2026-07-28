@@ -303,8 +303,13 @@ ap_chip_rows = load_abs(INVENTARIO_FILE, "Resumo (AP. e CHIP)")
 data_contagem_raw = ap_chip_rows[0][1]
 data_contagem_str = data_str(data_contagem_raw) if data_contagem_raw else "-"
 
-STATUS_INVENTARIO_CLASSE = {
+STATUS_APARELHOS_CLASSE = {
     "OK": "ok", "OK - DIV": "warn", "OK - EX": "warn", "CONFIRMAR DIV": "warn",
+    "NOK": "bad", "NOK - DIV": "bad",
+}
+# chips com excesso de divergência (OK - EX) é situação esperada/aceita, não conta como divergência
+STATUS_CHIPS_CLASSE = {
+    "OK": "ok", "OK - DIV": "warn", "OK - EX": "ok",
     "NOK": "bad", "NOK - DIV": "bad",
 }
 BUCKET_PRIORIDADE = {"Com divergência": 0, "Não iniciado": 1, "Parcial": 2, "OK com ajuste": 3, "Completo": 4}
@@ -319,12 +324,13 @@ def extrair_area(responsavel):
 
 
 def bucket_filial(aparelhos, chips):
-    problematicos = {"NOK", "NOK - DIV", "OK - EX", "CONFIRMAR DIV"}
+    problematicos_aparelhos = {"NOK", "NOK - DIV", "OK - EX", "CONFIRMAR DIV"}
+    problematicos_chips = {"NOK", "NOK - DIV"}
     if aparelhos is None and chips is None:
         return "Não iniciado"
     if aparelhos is None or chips is None:
         return "Parcial"
-    if aparelhos in problematicos or chips in problematicos:
+    if aparelhos in problematicos_aparelhos or chips in problematicos_chips:
         return "Com divergência"
     if aparelhos == "OK - DIV" or chips == "OK - DIV":
         return "OK com ajuste"
@@ -341,9 +347,9 @@ for r in ap_chip_rows[2:]:
     inventario_filiais.append({
         "filial": filial, "area": extrair_area(responsavel),
         "aparelhos": aparelhos or "PENDENTE",
-        "aparelhos_cls": STATUS_INVENTARIO_CLASSE.get(aparelhos, "warn" if aparelhos is None else ""),
+        "aparelhos_cls": STATUS_APARELHOS_CLASSE.get(aparelhos, "warn" if aparelhos is None else ""),
         "chips": chips or "PENDENTE",
-        "chips_cls": STATUS_INVENTARIO_CLASSE.get(chips, "warn" if chips is None else ""),
+        "chips_cls": STATUS_CHIPS_CLASSE.get(chips, "warn" if chips is None else ""),
         "qtd": qtd if qtd is not None else "-",
         "responsavel": responsavel or "-",
         "bucket": bucket, "bucket_cls": BUCKET_CLASSE.get(bucket, ""),
