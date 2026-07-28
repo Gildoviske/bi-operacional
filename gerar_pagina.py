@@ -556,10 +556,10 @@ def linhas_inventario():
             "<tr><td>{fil}</td><td>{area}</td>"
             "<td><span class='pill {ap_cls}'>{ap}</span></td>"
             "<td><span class='pill {ch_cls}'>{ch}</span></td>"
-            "<td class='num'>{qtd}</td><td>{resp}</td>"
+            "<td>{resp}</td>"
             "<td><span class='pill {b_cls}'>{b}</span></td></tr>".format(
                 fil=f["filial"], area=f["area"], ap=f["aparelhos"], ap_cls=f["aparelhos_cls"],
-                ch=f["chips"], ch_cls=f["chips_cls"], qtd=f["qtd"], resp=f["responsavel"],
+                ch=f["chips"], ch_cls=f["chips_cls"], resp=f["responsavel"],
                 b=f["bucket"], b_cls=f["bucket_cls"]
             )
         )
@@ -975,7 +975,7 @@ html = rf"""<!DOCTYPE html>
   </div>
   <div class="table-wrap">
   <table id="tbl-inventarios" class="sortable">
-    <thead><tr><th>Filial</th><th>Área</th><th>Aparelhos</th><th>Chips</th><th>Chips Ajustados</th><th>Responsável</th><th>Status Geral</th></tr></thead>
+    <thead><tr><th>Filial</th><th>Área</th><th>Aparelhos</th><th>Chips</th><th>Responsável</th><th>Status Geral</th></tr></thead>
     <tbody>
     {linhas_inventario()}
     </tbody>
