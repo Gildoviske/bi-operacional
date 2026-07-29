@@ -8,7 +8,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo Publicando no GitHub...
-git add index.html historico_inventario.json
+git add index.html historico_inventario.json historico_inventario_acessorios.json
 git commit -m "Atualizacao diaria"
 git push
 echo.

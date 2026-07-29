@@ -447,12 +447,14 @@ acessorios_inv_por_filial = {f["filial"]: f for f in acessorios_inv_filiais}
 
 # ---- histórico: a planilha só guarda o dia atual, então construímos o histórico
 # nós mesmos, gravando o snapshot de cada dia num arquivo à parte a cada publicação.
-# aparelhos/chips mudam de segunda a sexta; acessórios só muda às quartas — os dois ficam
-# no mesmo registro diário (o valor de acessórios só muda quando a planilha atualizar).
+# aparelhos/chips (seg/ter/qui/sex) e acessórios (só quarta) têm datas próprias e independentes,
+# por isso ficam em arquivos de histórico separados — misturar os dois numa linha só causava
+# status "grudado" de dias diferentes.
 HISTORICO_PATH = Path(__file__).resolve().parent / "historico_inventario.json"
+HISTORICO_ACESSORIOS_PATH = Path(__file__).resolve().parent / "historico_inventario_acessorios.json"
 
 
-def atualizar_historico_inventario(data_hoje, filiais, acessorios_por_filial):
+def atualizar_historico_inventario(data_hoje, filiais):
     if not data_hoje or data_hoje == "-":
         historico_existente = json.loads(HISTORICO_PATH.read_text(encoding="utf-8")) if HISTORICO_PATH.exists() else []
         return historico_existente
@@ -460,14 +462,10 @@ def atualizar_historico_inventario(data_hoje, filiais, acessorios_por_filial):
     historico = [h for h in historico if h["data"] != data_hoje]
     data_ts = int(datetime.strptime(data_hoje, "%d/%m/%Y").timestamp() * 1000)
     for f in filiais:
-        acess = acessorios_por_filial.get(f["filial"], {})
         historico.append({
             "data": data_hoje, "data_ts": data_ts, "filial": f["filial"], "area": f["area"],
             "aparelhos": f["aparelhos"], "chips": f["chips"],
             "bucket": f["bucket"], "bucket_cls": f["bucket_cls"],
-            "acessorios": acess.get("status", "-"),
-            "acessorios_bucket": acess.get("bucket", "Não iniciado"),
-            "acessorios_bucket_cls": acess.get("bucket_cls", ""),
         })
     datas_unicas = sorted(set(h["data"] for h in historico), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
     datas_manter = set(datas_unicas[-60:])
@@ -476,9 +474,33 @@ def atualizar_historico_inventario(data_hoje, filiais, acessorios_por_filial):
     return historico
 
 
-historico_inventario = atualizar_historico_inventario(data_contagem_str, inventario_filiais, acessorios_inv_por_filial)
+def atualizar_historico_acessorios(data_contagem, filiais):
+    if not data_contagem or data_contagem == "-":
+        existente = json.loads(HISTORICO_ACESSORIOS_PATH.read_text(encoding="utf-8")) if HISTORICO_ACESSORIOS_PATH.exists() else []
+        return existente
+    historico = json.loads(HISTORICO_ACESSORIOS_PATH.read_text(encoding="utf-8")) if HISTORICO_ACESSORIOS_PATH.exists() else []
+    historico = [h for h in historico if h["data"] != data_contagem]
+    data_ts = int(datetime.strptime(data_contagem, "%d/%m/%Y").timestamp() * 1000)
+    for f in filiais:
+        historico.append({
+            "data": data_contagem, "data_ts": data_ts, "filial": f["filial"], "area": f["area"],
+            "status": f["status"], "qtd": f["qtd"],
+            "bucket": f["bucket"], "bucket_cls": f["bucket_cls"],
+        })
+    datas_unicas = sorted(set(h["data"] for h in historico), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
+    datas_manter = set(datas_unicas[-20:])  # ~20 quartas-feiras (uns 5 meses)
+    historico = [h for h in historico if h["data"] in datas_manter]
+    HISTORICO_ACESSORIOS_PATH.write_text(json.dumps(historico, ensure_ascii=False), encoding="utf-8")
+    return historico
+
+
+historico_inventario = atualizar_historico_inventario(data_contagem_str, inventario_filiais)
 historico_dias = sorted(set(h["data"] for h in historico_inventario), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
 historico_primeiro_dia = historico_dias[0] if historico_dias else "-"
+
+historico_acessorios = atualizar_historico_acessorios(data_contagem_acess_str, acessorios_inv_filiais)
+historico_acessorios_dias = sorted(set(h["data"] for h in historico_acessorios), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
+historico_acessorios_primeiro_dia = historico_acessorios_dias[0] if historico_acessorios_dias else "-"
 
 # peso de cada status pra taxa de conclusão: feito (mesmo com divergência/aguardando) = 100%,
 # parcial (só aparelhos ou só chips) = 50%, não feito/não iniciado = 0%
@@ -505,16 +527,13 @@ historico_resumo = {
     "taxa_media": round(sum(t["taxa"] for t in historico_taxas) / len(historico_taxas), 1) if historico_taxas else 0,
 }
 
-# taxa de acessórios calculada só em cima das quartas-feiras registradas (é quando a contagem
-# realmente acontece; nos outros dias o valor só fica "carregado" do último dado, contar todo dia
-# distorceria a taxa)
+# taxa de acessórios calculada em cima do histórico próprio de acessórios (uma entrada por
+# quarta-feira efetivamente registrada, nada de misturar com os dias de aparelhos/chips)
 historico_acessorios_por_filial = {}
-for h in historico_inventario:
-    if datetime.strptime(h["data"], "%d/%m/%Y").weekday() != 2:
-        continue
+for h in historico_acessorios:
     stats = historico_acessorios_por_filial.setdefault(h["filial"], {"dias": 0, "pontos": 0.0})
     stats["dias"] += 1
-    stats["pontos"] += BUCKET_PESO.get(h.get("acessorios_bucket", "Não iniciado"), 0.0)
+    stats["pontos"] += BUCKET_PESO.get(h["bucket"], 0.0)
 
 historico_acessorios_taxas = []
 for filial, stats in historico_acessorios_por_filial.items():
@@ -523,10 +542,11 @@ for filial, stats in historico_acessorios_por_filial.items():
 historico_acessorios_taxas.sort(key=lambda x: x["taxa"])
 
 historico_acessorios_resumo = {
-    "quartas_registradas": len(set(h["data"] for h in historico_inventario if datetime.strptime(h["data"], "%d/%m/%Y").weekday() == 2)),
+    "quartas_registradas": len(historico_acessorios_dias),
     "taxa_media": round(sum(t["taxa"] for t in historico_acessorios_taxas) / len(historico_acessorios_taxas), 1) if historico_acessorios_taxas else 0,
 }
 historico_json = json.dumps(historico_inventario, ensure_ascii=False)
+historico_acessorios_json = json.dumps(historico_acessorios, ensure_ascii=False)
 
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -1163,7 +1183,7 @@ html = rf"""<!DOCTYPE html>
     <div class="chart-box wide"><h4>Taxa de conclusão por filial — aparelhos/chips <button class="chart-export-btn" data-chart-export="chart-historico-taxa" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-historico-taxa"></canvas></div></div>
     <div class="chart-box wide"><h4>Taxa de conclusão por filial — acessórios (só quartas-feiras) <button class="chart-export-btn" data-chart-export="chart-historico-acessorios-taxa" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-historico-acessorios-taxa"></canvas></div></div>
   </div>
-  <h3>📋 Linha do tempo por filial</h3>
+  <h3>📋 Linha do tempo por filial — Aparelhos e Chips</h3>
   <div class="filtros-pedidos">
     <input class="filtro" id="filtro-historico" placeholder="Buscar por filial, data...">
     <div class="msel" id="msel-historico-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
@@ -1176,12 +1196,31 @@ html = rf"""<!DOCTYPE html>
     <thead><tr>
       <th data-col="data">Data</th><th data-col="filial">Filial</th><th data-col="area">Área</th>
       <th data-col="aparelhos">Aparelhos</th><th data-col="chips">Chips</th><th data-col="bucket">Status Geral</th>
-      <th data-col="acessorios">Acessórios</th><th data-col="acessorios_bucket">Status Acessórios</th>
     </tr></thead>
     <tbody id="tbody-historico"></tbody>
   </table>
   </div>
   <div class="pager" id="pager-historico"></div>
+
+  <h3 style="margin-top:32px;">📋 Linha do tempo por filial — Acessórios (quartas-feiras)</h3>
+  <p class="secao-mtime">Desde {historico_acessorios_primeiro_dia} · {historico_acessorios_resumo['quartas_registradas']} quarta(s)-feira(s) registrada(s)</p>
+  <div class="filtros-pedidos">
+    <input class="filtro" id="filtro-historico-acessorios" placeholder="Buscar por filial, data...">
+    <div class="msel" id="msel-historico-acessorios-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-historico-acessorios-bucket"><button type="button" class="msel-btn" data-default="Status geral (todos)">Status geral (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <button id="limpar-historico-acessorios" type="button">Limpar filtros</button>
+    <button class="table-export-btn" data-export="tbl-historico-acessorios">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-historico-acessorios">
+    <thead><tr>
+      <th data-col="data">Data</th><th data-col="filial">Filial</th><th data-col="area">Área</th>
+      <th data-col="status">Status</th><th data-col="qtd">Quantidade</th><th data-col="bucket">Status Geral</th>
+    </tr></thead>
+    <tbody id="tbody-historico-acessorios"></tbody>
+  </table>
+  </div>
+  <div class="pager" id="pager-historico-acessorios"></div>
 </section>
 
 </main>
@@ -1875,9 +1914,7 @@ criarTabelaPaginada({{
 function linhaHistoricoHtml(r) {{
   return '<tr><td>' + r.data + '</td><td>' + r.filial + '</td><td>' + r.area + '</td>' +
     '<td>' + r.aparelhos + '</td><td>' + r.chips + '</td>' +
-    '<td><span class="pill ' + r.bucket_cls + '">' + r.bucket + '</span></td>' +
-    '<td>' + r.acessorios + '</td>' +
-    '<td><span class="pill ' + r.acessorios_bucket_cls + '">' + r.acessorios_bucket + '</span></td></tr>';
+    '<td><span class="pill ' + r.bucket_cls + '">' + r.bucket + '</span></td></tr>';
 }}
 
 var HISTORICO_COLS = {{
@@ -1886,9 +1923,7 @@ var HISTORICO_COLS = {{
   area: function(r) {{ return r.area.toLowerCase(); }},
   aparelhos: function(r) {{ return r.aparelhos.toLowerCase(); }},
   chips: function(r) {{ return r.chips.toLowerCase(); }},
-  bucket: function(r) {{ return r.bucket.toLowerCase(); }},
-  acessorios: function(r) {{ return r.acessorios.toLowerCase(); }},
-  acessorios_bucket: function(r) {{ return r.acessorios_bucket.toLowerCase(); }}
+  bucket: function(r) {{ return r.bucket.toLowerCase(); }}
 }};
 
 function buscaHistorico(r) {{ return r.filial + ' ' + r.data + ' ' + r.area; }}
@@ -1909,9 +1944,45 @@ criarTabelaPaginada({{
     {{ label: 'Área', get: function(r) {{ return r.area; }} }},
     {{ label: 'Aparelhos', get: function(r) {{ return r.aparelhos; }} }},
     {{ label: 'Chips', get: function(r) {{ return r.chips; }} }},
-    {{ label: 'Status Geral', get: function(r) {{ return r.bucket; }} }},
-    {{ label: 'Acessórios', get: function(r) {{ return r.acessorios; }} }},
-    {{ label: 'Status Acessórios', get: function(r) {{ return r.acessorios_bucket; }} }}
+    {{ label: 'Status Geral', get: function(r) {{ return r.bucket; }} }}
+  ]
+}});
+
+// ---- historico de acessorios (separado, uma linha por quarta-feira registrada) ----
+function linhaHistoricoAcessoriosHtml(r) {{
+  return '<tr><td>' + r.data + '</td><td>' + r.filial + '</td><td>' + r.area + '</td>' +
+    '<td>' + r.status + '</td><td class="num">' + r.qtd + '</td>' +
+    '<td><span class="pill ' + r.bucket_cls + '">' + r.bucket + '</span></td></tr>';
+}}
+
+var HISTORICO_ACESSORIOS_COLS = {{
+  data: function(r) {{ return r.data_ts; }},
+  filial: function(r) {{ return r.filial.toLowerCase(); }},
+  area: function(r) {{ return r.area.toLowerCase(); }},
+  status: function(r) {{ return r.status.toLowerCase(); }},
+  qtd: function(r) {{ return typeof r.qtd === 'number' ? r.qtd : -Infinity; }},
+  bucket: function(r) {{ return r.bucket.toLowerCase(); }}
+}};
+
+function buscaHistoricoAcessorios(r) {{ return r.filial + ' ' + r.data + ' ' + r.area; }}
+
+criarTabelaPaginada({{
+  dados: {historico_acessorios_json},
+  pageSize: 50, sortInicial: 'data',
+  tbodyId: 'tbody-historico-acessorios', pagerId: 'pager-historico-acessorios', tableId: 'tbl-historico-acessorios',
+  buscaId: 'filtro-historico-acessorios', limparId: 'limpar-historico-acessorios',
+  colunas: HISTORICO_ACESSORIOS_COLS, linhaHtml: linhaHistoricoAcessoriosHtml, busca: buscaHistoricoAcessorios,
+  filtros: [
+    {{ id: 'historico-acessorios-filial', campo: 'filial' }},
+    {{ id: 'historico-acessorios-bucket', campo: 'bucket' }}
+  ],
+  colunasExport: [
+    {{ label: 'Data', get: function(r) {{ return r.data; }} }},
+    {{ label: 'Filial', get: function(r) {{ return r.filial; }} }},
+    {{ label: 'Área', get: function(r) {{ return r.area; }} }},
+    {{ label: 'Status', get: function(r) {{ return r.status; }} }},
+    {{ label: 'Quantidade', get: function(r) {{ return r.qtd; }} }},
+    {{ label: 'Status Geral', get: function(r) {{ return r.bucket; }} }}
   ]
 }});
 
