@@ -515,8 +515,15 @@ BUCKET_PESO = {
     "Parcial": 0.5, "Não iniciado": 0.0, "Não realizada": 0.0,
 }
 
+# o dia mais recente registrado pode ainda estar em andamento (a contagem só termina às 17h),
+# então ele fica de fora da média histórica — senão um dia pela metade derruba a taxa de quem já
+# fechou 100% nos dias anteriores. Só usa esse último dia se for o único que existe.
+dias_fechados = set(historico_dias[:-1]) if len(historico_dias) > 1 else set(historico_dias)
+
 historico_por_filial = {}
 for h in historico_inventario:
+    if h["data"] not in dias_fechados:
+        continue
     stats = historico_por_filial.setdefault(h["filial"], {"dias": 0, "pontos": 0.0})
     stats["dias"] += 1
     stats["pontos"] += BUCKET_PESO.get(h["bucket"], 0.0)
@@ -534,9 +541,14 @@ historico_resumo = {
 }
 
 # taxa de acessórios calculada em cima do histórico próprio de acessórios (uma entrada por
-# quarta-feira efetivamente registrada, nada de misturar com os dias de aparelhos/chips)
+# quarta-feira efetivamente registrada, nada de misturar com os dias de aparelhos/chips); a
+# quarta-feira mais recente também fica de fora se ainda não fechou (mesma lógica acima)
+quartas_fechadas = set(historico_acessorios_dias[:-1]) if len(historico_acessorios_dias) > 1 else set(historico_acessorios_dias)
+
 historico_acessorios_por_filial = {}
 for h in historico_acessorios:
+    if h["data"] not in quartas_fechadas:
+        continue
     stats = historico_acessorios_por_filial.setdefault(h["filial"], {"dias": 0, "pontos": 0.0})
     stats["dias"] += 1
     stats["pontos"] += BUCKET_PESO.get(h["bucket"], 0.0)
@@ -1190,6 +1202,7 @@ html = rf"""<!DOCTYPE html>
 <section id="inventarios-historico">
   <h2>📆 Histórico de Contagem por Filial</h2>
   <p class="secao-mtime">🕒 Histórico construído automaticamente a cada publicação, desde {historico_primeiro_dia} · {historico_resumo['dias_registrados']} dia(s) registrado(s) até agora</p>
+  <p class="secao-mtime">ℹ️ As taxas de conclusão abaixo não contam o dia mais recente (pode ainda estar em andamento até às 17h) — refletem só os dias já fechados.</p>
   <div class="cards">
     <div class="card"><div class="label">Dias registrados</div><div class="value">{historico_resumo['dias_registrados']}</div></div>
     <div class="card"><div class="label">Registros no histórico</div><div class="value">{historico_resumo['registros']}</div></div>
