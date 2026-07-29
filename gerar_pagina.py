@@ -303,17 +303,15 @@ ap_chip_rows = load_abs(INVENTARIO_FILE, "Resumo (AP. e CHIP)")
 data_contagem_raw = ap_chip_rows[0][1]
 data_contagem_str = data_str(data_contagem_raw) if data_contagem_raw else "-"
 
-STATUS_APARELHOS_CLASSE = {
-    "OK": "ok", "OK - DIV": "warn", "OK - EX": "warn", "CONFIRMAR DIV": "warn",
-    "NOK": "bad", "NOK - DIV": "bad",
-}
-# chips com excesso de divergência (OK - EX) é situação esperada/aceita, não conta como divergência
-STATUS_CHIPS_CLASSE = {
-    "OK": "ok", "OK - DIV": "warn", "OK - EX": "ok",
-    "NOK": "bad", "NOK - DIV": "bad",
-}
+# única coisa que conta como "não feito"/problema é NOK e NOK - DIV; o resto (OK, OK - DIV,
+# OK - EX, CONFIRMAR DIV) conta como contagem feita.
+STATUS_RUIM = {"NOK", "NOK - DIV"}
+STATUS_INVENTARIO_CLASSE = {"OK": "ok", "OK - DIV": "ok", "OK - EX": "ok", "CONFIRMAR DIV": "ok", "NOK": "bad", "NOK - DIV": "bad"}
 BUCKET_PRIORIDADE = {"Com divergência": 0, "Não iniciado": 1, "Parcial": 2, "OK com ajuste": 3, "Completo": 4}
 BUCKET_CLASSE = {"Completo": "ok", "OK com ajuste": "ok", "Parcial": "warn", "Com divergência": "bad", "Não iniciado": ""}
+
+# filiais que não fazem contagem de chips (só aparelhos)
+FILIAIS_SEM_CONTAGEM_CHIP = {"OUTLET MAUA"}
 
 
 def extrair_area(responsavel):
@@ -323,14 +321,18 @@ def extrair_area(responsavel):
     return m.group(1) if m else "-"
 
 
-def bucket_filial(aparelhos, chips):
-    problematicos_aparelhos = {"NOK", "NOK - DIV", "OK - EX", "CONFIRMAR DIV"}
-    problematicos_chips = {"NOK", "NOK - DIV"}
+def bucket_filial(aparelhos, chips, tem_chip=True):
+    if not tem_chip:
+        if aparelhos is None:
+            return "Não iniciado"
+        if aparelhos in STATUS_RUIM:
+            return "Com divergência"
+        return "OK com ajuste" if aparelhos == "OK - DIV" else "Completo"
     if aparelhos is None and chips is None:
         return "Não iniciado"
     if aparelhos is None or chips is None:
         return "Parcial"
-    if aparelhos in problematicos_aparelhos or chips in problematicos_chips:
+    if aparelhos in STATUS_RUIM or chips in STATUS_RUIM:
         return "Com divergência"
     if aparelhos == "OK - DIV" or chips == "OK - DIV":
         return "OK com ajuste"
@@ -343,13 +345,14 @@ for r in ap_chip_rows[2:]:
     if not filial:
         continue
     aparelhos, chips, qtd, responsavel = r[1], r[2], r[3], r[4]
-    bucket = bucket_filial(aparelhos, chips)
+    tem_chip = filial not in FILIAIS_SEM_CONTAGEM_CHIP
+    bucket = bucket_filial(aparelhos, chips, tem_chip)
     inventario_filiais.append({
         "filial": filial, "area": extrair_area(responsavel),
         "aparelhos": aparelhos or "PENDENTE",
-        "aparelhos_cls": STATUS_APARELHOS_CLASSE.get(aparelhos, "warn" if aparelhos is None else ""),
-        "chips": chips or "PENDENTE",
-        "chips_cls": STATUS_CHIPS_CLASSE.get(chips, "warn" if chips is None else ""),
+        "aparelhos_cls": STATUS_INVENTARIO_CLASSE.get(aparelhos, "warn" if aparelhos is None else ""),
+        "chips": (chips or "PENDENTE") if tem_chip else "N/A",
+        "chips_cls": (STATUS_INVENTARIO_CLASSE.get(chips, "warn" if chips is None else "")) if tem_chip else "",
         "qtd": qtd if qtd is not None else "-",
         "responsavel": responsavel or "-",
         "bucket": bucket, "bucket_cls": BUCKET_CLASSE.get(bucket, ""),
