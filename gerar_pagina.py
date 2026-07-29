@@ -404,12 +404,55 @@ for f in inventario_filiais:
     inventario_buckets[f["bucket"]] = inventario_buckets.get(f["bucket"], 0) + 1
 INVENTARIO_ORDEM_BUCKET = ["Completo", "Com divergência", "Aguardando 2ª contagem", "Parcial", "Não iniciado", "Não realizada"]
 
+# ------------------------------------------------ INVENTÁRIO DE ACESSÓRIOS (semanal, quartas-feiras)
+acess_rows = load_abs(INVENTARIO_FILE, "Resumo (ACESS.)")
+data_contagem_acess_raw = acess_rows[0][1]
+data_contagem_acess_str = data_str(data_contagem_acess_raw) if data_contagem_acess_raw else "-"
+
+acessorios_inv_filiais = []
+for r in acess_rows[2:]:
+    filial = r[0]
+    if not filial:
+        continue
+    diversos, qtd, responsavel = r[1], r[2], r[5]
+    if diversos is None:
+        bucket_a = "Não iniciado"
+        status_cls = "warn"
+    elif qtd not in (None, 0):
+        bucket_a = "Com divergência"
+        status_cls = "warn"
+    else:
+        bucket_a = "Completo"
+        status_cls = "ok"
+    acessorios_inv_filiais.append({
+        "filial": filial, "area": extrair_area(responsavel),
+        "status": diversos or "PENDENTE", "status_cls": status_cls,
+        "qtd": qtd if qtd is not None else "-",
+        "responsavel": responsavel or "-",
+        "bucket": bucket_a, "bucket_cls": BUCKET_CLASSE.get(bucket_a, ""),
+    })
+acessorios_inv_filiais.sort(key=lambda f: (BUCKET_PRIORIDADE.get(f["bucket"], 5), f["filial"]))
+
+acessorios_inv_resumo = {
+    "total": len(acessorios_inv_filiais),
+    "completo": sum(1 for f in acessorios_inv_filiais if f["bucket"] == "Completo"),
+    "divergencia": sum(1 for f in acessorios_inv_filiais if f["bucket"] == "Com divergência"),
+    "pendente": sum(1 for f in acessorios_inv_filiais if f["bucket"] == "Não iniciado"),
+}
+
+acessorios_inv_buckets = {}
+for f in acessorios_inv_filiais:
+    acessorios_inv_buckets[f["bucket"]] = acessorios_inv_buckets.get(f["bucket"], 0) + 1
+acessorios_inv_por_filial = {f["filial"]: f for f in acessorios_inv_filiais}
+
 # ---- histórico: a planilha só guarda o dia atual, então construímos o histórico
 # nós mesmos, gravando o snapshot de cada dia num arquivo à parte a cada publicação.
+# aparelhos/chips mudam de segunda a sexta; acessórios só muda às quartas — os dois ficam
+# no mesmo registro diário (o valor de acessórios só muda quando a planilha atualizar).
 HISTORICO_PATH = Path(__file__).resolve().parent / "historico_inventario.json"
 
 
-def atualizar_historico_inventario(data_hoje, filiais):
+def atualizar_historico_inventario(data_hoje, filiais, acessorios_por_filial):
     if not data_hoje or data_hoje == "-":
         historico_existente = json.loads(HISTORICO_PATH.read_text(encoding="utf-8")) if HISTORICO_PATH.exists() else []
         return historico_existente
@@ -417,10 +460,14 @@ def atualizar_historico_inventario(data_hoje, filiais):
     historico = [h for h in historico if h["data"] != data_hoje]
     data_ts = int(datetime.strptime(data_hoje, "%d/%m/%Y").timestamp() * 1000)
     for f in filiais:
+        acess = acessorios_por_filial.get(f["filial"], {})
         historico.append({
             "data": data_hoje, "data_ts": data_ts, "filial": f["filial"], "area": f["area"],
             "aparelhos": f["aparelhos"], "chips": f["chips"],
             "bucket": f["bucket"], "bucket_cls": f["bucket_cls"],
+            "acessorios": acess.get("status", "-"),
+            "acessorios_bucket": acess.get("bucket", "Não iniciado"),
+            "acessorios_bucket_cls": acess.get("bucket_cls", ""),
         })
     datas_unicas = sorted(set(h["data"] for h in historico), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
     datas_manter = set(datas_unicas[-60:])
@@ -429,7 +476,7 @@ def atualizar_historico_inventario(data_hoje, filiais):
     return historico
 
 
-historico_inventario = atualizar_historico_inventario(data_contagem_str, inventario_filiais)
+historico_inventario = atualizar_historico_inventario(data_contagem_str, inventario_filiais, acessorios_inv_por_filial)
 historico_dias = sorted(set(h["data"] for h in historico_inventario), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
 historico_primeiro_dia = historico_dias[0] if historico_dias else "-"
 
@@ -456,6 +503,28 @@ historico_resumo = {
     "dias_registrados": len(historico_dias),
     "registros": len(historico_inventario),
     "taxa_media": round(sum(t["taxa"] for t in historico_taxas) / len(historico_taxas), 1) if historico_taxas else 0,
+}
+
+# taxa de acessórios calculada só em cima das quartas-feiras registradas (é quando a contagem
+# realmente acontece; nos outros dias o valor só fica "carregado" do último dado, contar todo dia
+# distorceria a taxa)
+historico_acessorios_por_filial = {}
+for h in historico_inventario:
+    if datetime.strptime(h["data"], "%d/%m/%Y").weekday() != 2:
+        continue
+    stats = historico_acessorios_por_filial.setdefault(h["filial"], {"dias": 0, "pontos": 0.0})
+    stats["dias"] += 1
+    stats["pontos"] += BUCKET_PESO.get(h.get("acessorios_bucket", "Não iniciado"), 0.0)
+
+historico_acessorios_taxas = []
+for filial, stats in historico_acessorios_por_filial.items():
+    taxa = round(100 * stats["pontos"] / stats["dias"], 1) if stats["dias"] else 0
+    historico_acessorios_taxas.append({"filial": filial, "dias": stats["dias"], "taxa": taxa})
+historico_acessorios_taxas.sort(key=lambda x: x["taxa"])
+
+historico_acessorios_resumo = {
+    "quartas_registradas": len(set(h["data"] for h in historico_inventario if datetime.strptime(h["data"], "%d/%m/%Y").weekday() == 2)),
+    "taxa_media": round(sum(t["taxa"] for t in historico_acessorios_taxas) / len(historico_acessorios_taxas), 1) if historico_acessorios_taxas else 0,
 }
 historico_json = json.dumps(historico_inventario, ensure_ascii=False)
 
@@ -516,6 +585,14 @@ chart_data = {
     "historicoTaxas": {
         "labels": [t["filial"] for t in historico_taxas],
         "taxa": [t["taxa"] for t in historico_taxas],
+    },
+    "acessoriosInvBuckets": {
+        "labels": [b for b in INVENTARIO_ORDEM_BUCKET if acessorios_inv_buckets.get(b)],
+        "values": [acessorios_inv_buckets.get(b, 0) for b in INVENTARIO_ORDEM_BUCKET if acessorios_inv_buckets.get(b)],
+    },
+    "historicoAcessoriosTaxas": {
+        "labels": [t["filial"] for t in historico_acessorios_taxas],
+        "taxa": [t["taxa"] for t in historico_acessorios_taxas],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -609,6 +686,21 @@ def linhas_inventario():
                 fil=f["filial"], area=f["area"], ap=f["aparelhos"], ap_cls=f["aparelhos_cls"],
                 ch=f["chips"], ch_cls=f["chips_cls"], resp=f["responsavel"],
                 b=f["bucket"], b_cls=f["bucket_cls"]
+            )
+        )
+    return "\n".join(out)
+
+
+def linhas_inventario_acessorios():
+    out = []
+    for f in acessorios_inv_filiais:
+        out.append(
+            "<tr><td>{fil}</td><td>{area}</td>"
+            "<td><span class='pill {s_cls}'>{s}</span></td>"
+            "<td class='num'>{qtd}</td><td>{resp}</td>"
+            "<td><span class='pill {b_cls}'>{b}</span></td></tr>".format(
+                fil=f["filial"], area=f["area"], s=f["status"], s_cls=f["status_cls"],
+                qtd=f["qtd"], resp=f["responsavel"], b=f["bucket"], b_cls=f["bucket_cls"]
             )
         )
     return "\n".join(out)
@@ -1005,7 +1097,7 @@ html = rf"""<!DOCTYPE html>
 {secao_devolvidos(devolvidos_mtime, devolvidos_resumo)}
 
 <section id="inventarios">
-  <h2>📋 Inventários — Status Diário</h2>
+  <h2>📋 Inventários — Aparelhos e Chips (Diário)</h2>
   <p class="secao-mtime">🕒 Planilha atualizada em {inventario_mtime} · Contagem referente a {data_contagem_str}</p>
   <div class="cards">
     <div class="card"><div class="label">Filiais</div><div class="value">{inventario_resumo['total']}</div></div>
@@ -1030,6 +1122,31 @@ html = rf"""<!DOCTYPE html>
     </tbody>
   </table>
   </div>
+
+  <h2 style="margin-top:40px;">🧩 Inventário de Acessórios (Semanal — Quartas-feiras)</h2>
+  <p class="secao-mtime">🕒 Contagem referente a {data_contagem_acess_str} · atualiza só às quartas-feiras, nos outros dias mostra o último resultado</p>
+  <div class="cards">
+    <div class="card"><div class="label">Filiais</div><div class="value">{acessorios_inv_resumo['total']}</div></div>
+    <div class="card ok"><div class="label">Completo</div><div class="value">{acessorios_inv_resumo['completo']}</div></div>
+    <div class="card warn"><div class="label">Com divergência</div><div class="value">{acessorios_inv_resumo['divergencia']}</div></div>
+    <div class="card warn"><div class="label">Pendente</div><div class="value">{acessorios_inv_resumo['pendente']}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box"><h4>Status geral das filiais <button class="chart-export-btn" data-chart-export="chart-inventario-acessorios-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-inventario-acessorios-status"></canvas></div></div>
+  </div>
+  <h3>📋 Status por filial</h3>
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-inventarios-acessorios" placeholder="Filtrar por filial, área ou responsável...">
+    <button class="table-export-btn" data-export="tbl-inventarios-acessorios">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-inventarios-acessorios" class="sortable">
+    <thead><tr><th>Filial</th><th>Área</th><th>Status</th><th>Quantidade</th><th>Responsável</th><th>Status Geral</th></tr></thead>
+    <tbody>
+    {linhas_inventario_acessorios()}
+    </tbody>
+  </table>
+  </div>
 </section>
 
 <section id="inventarios-historico">
@@ -1038,10 +1155,13 @@ html = rf"""<!DOCTYPE html>
   <div class="cards">
     <div class="card"><div class="label">Dias registrados</div><div class="value">{historico_resumo['dias_registrados']}</div></div>
     <div class="card"><div class="label">Registros no histórico</div><div class="value">{historico_resumo['registros']}</div></div>
-    <div class="card ok"><div class="label">Taxa média de conclusão</div><div class="value">{historico_resumo['taxa_media']}%</div></div>
+    <div class="card ok"><div class="label">Taxa média de conclusão (aparelhos/chips)</div><div class="value">{historico_resumo['taxa_media']}%</div></div>
+    <div class="card"><div class="label">Quartas-feiras registradas</div><div class="value">{historico_acessorios_resumo['quartas_registradas']}</div></div>
+    <div class="card ok"><div class="label">Taxa média de conclusão (acessórios)</div><div class="value">{historico_acessorios_resumo['taxa_media']}%</div></div>
   </div>
   <div class="charts">
-    <div class="chart-box wide"><h4>Taxa de conclusão por filial (histórico) <button class="chart-export-btn" data-chart-export="chart-historico-taxa" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-historico-taxa"></canvas></div></div>
+    <div class="chart-box wide"><h4>Taxa de conclusão por filial — aparelhos/chips <button class="chart-export-btn" data-chart-export="chart-historico-taxa" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-historico-taxa"></canvas></div></div>
+    <div class="chart-box wide"><h4>Taxa de conclusão por filial — acessórios (só quartas-feiras) <button class="chart-export-btn" data-chart-export="chart-historico-acessorios-taxa" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-historico-acessorios-taxa"></canvas></div></div>
   </div>
   <h3>📋 Linha do tempo por filial</h3>
   <div class="filtros-pedidos">
@@ -1056,6 +1176,7 @@ html = rf"""<!DOCTYPE html>
     <thead><tr>
       <th data-col="data">Data</th><th data-col="filial">Filial</th><th data-col="area">Área</th>
       <th data-col="aparelhos">Aparelhos</th><th data-col="chips">Chips</th><th data-col="bucket">Status Geral</th>
+      <th data-col="acessorios">Acessórios</th><th data-col="acessorios_bucket">Status Acessórios</th>
     </tr></thead>
     <tbody id="tbody-historico"></tbody>
   </table>
@@ -1268,7 +1389,7 @@ document.addEventListener('click', function(e) {{
   }}
 }});
 
-['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-transf', 'tbl-inventarios'].forEach(registrarExportDOM);
+['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-transf', 'tbl-inventarios', 'tbl-inventarios-acessorios'].forEach(registrarExportDOM);
 
 // ---- fabrica generica de tabela paginada com busca + multi-selecao, usada pelas tabelas de acessorios ----
 function criarTabelaPaginada(opts) {{
@@ -1754,7 +1875,9 @@ criarTabelaPaginada({{
 function linhaHistoricoHtml(r) {{
   return '<tr><td>' + r.data + '</td><td>' + r.filial + '</td><td>' + r.area + '</td>' +
     '<td>' + r.aparelhos + '</td><td>' + r.chips + '</td>' +
-    '<td><span class="pill ' + r.bucket_cls + '">' + r.bucket + '</span></td></tr>';
+    '<td><span class="pill ' + r.bucket_cls + '">' + r.bucket + '</span></td>' +
+    '<td>' + r.acessorios + '</td>' +
+    '<td><span class="pill ' + r.acessorios_bucket_cls + '">' + r.acessorios_bucket + '</span></td></tr>';
 }}
 
 var HISTORICO_COLS = {{
@@ -1763,7 +1886,9 @@ var HISTORICO_COLS = {{
   area: function(r) {{ return r.area.toLowerCase(); }},
   aparelhos: function(r) {{ return r.aparelhos.toLowerCase(); }},
   chips: function(r) {{ return r.chips.toLowerCase(); }},
-  bucket: function(r) {{ return r.bucket.toLowerCase(); }}
+  bucket: function(r) {{ return r.bucket.toLowerCase(); }},
+  acessorios: function(r) {{ return r.acessorios.toLowerCase(); }},
+  acessorios_bucket: function(r) {{ return r.acessorios_bucket.toLowerCase(); }}
 }};
 
 function buscaHistorico(r) {{ return r.filial + ' ' + r.data + ' ' + r.area; }}
@@ -1784,7 +1909,9 @@ criarTabelaPaginada({{
     {{ label: 'Área', get: function(r) {{ return r.area; }} }},
     {{ label: 'Aparelhos', get: function(r) {{ return r.aparelhos; }} }},
     {{ label: 'Chips', get: function(r) {{ return r.chips; }} }},
-    {{ label: 'Status Geral', get: function(r) {{ return r.bucket; }} }}
+    {{ label: 'Status Geral', get: function(r) {{ return r.bucket; }} }},
+    {{ label: 'Acessórios', get: function(r) {{ return r.acessorios; }} }},
+    {{ label: 'Status Acessórios', get: function(r) {{ return r.acessorios_bucket; }} }}
   ]
 }});
 
@@ -1931,6 +2058,30 @@ new Chart(document.getElementById('chart-historico-taxa'), {{
     plugins: {{ legend: {{ display: false }} }}, scales: {{ x: {{ max: 100 }} }}
   }}
 }});
+
+new Chart(document.getElementById('chart-inventario-acessorios-status'), {{
+  type: 'doughnut',
+  data: {{
+    labels: CHART_DATA.acessoriosInvBuckets.labels,
+    datasets: [{{
+      data: CHART_DATA.acessoriosInvBuckets.values,
+      backgroundColor: CHART_DATA.acessoriosInvBuckets.labels.map(function(l) {{ return CORES_BUCKET_INVENTARIO[l] || COR_ACCENT; }})
+    }}]
+  }},
+  options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
+}});
+
+new Chart(document.getElementById('chart-historico-acessorios-taxa'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.historicoAcessoriosTaxas.labels,
+    datasets: [{{ label: 'Taxa de conclusão (%)', data: CHART_DATA.historicoAcessoriosTaxas.taxa, backgroundColor: COR_ACCENT }}]
+  }},
+  options: {{
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: {{ legend: {{ display: false }} }}, scales: {{ x: {{ max: 100 }} }}
+  }}
+}});
 </script>
 </body>
 </html>
@@ -1941,6 +2092,7 @@ print(
     f"OK: {OUT} gerado com {len(notas_atrasadas)} notas atrasadas, {len(transf_todas)} transferências pendentes "
     f"({len(transf_criticas)} críticas), {len(acessorios_diversos_itens)} itens de acessórios, "
     f"{len(seriais_itens)} peças com serial de acessórios fidelizados TIM, "
-    f"{len(devolvidos_itens)} itens devolvidos/com defeito e inventário de {inventario_resumo['total']} filiais "
-    f"({historico_resumo['dias_registrados']} dia(s) no histórico)."
+    f"{len(devolvidos_itens)} itens devolvidos/com defeito, inventário de {inventario_resumo['total']} filiais "
+    f"({historico_resumo['dias_registrados']} dia(s) no histórico) e inventário de acessórios de "
+    f"{acessorios_inv_resumo['total']} filiais ({historico_acessorios_resumo['quartas_registradas']} quarta(s) no histórico)."
 )
