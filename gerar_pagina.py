@@ -303,19 +303,20 @@ ap_chip_rows = load_abs(INVENTARIO_FILE, "Resumo (AP. e CHIP)")
 data_contagem_raw = ap_chip_rows[0][1]
 data_contagem_str = data_str(data_contagem_raw) if data_contagem_raw else "-"
 
-# o que conta como "não feito"/problema é NOK e NOK - DIV (divergência real, contagem feita mas
-# não resolvida); CONFIRMAR DIV também é "não feito" (aguardando a 2ª contagem). O resto
-# (OK, OK - DIV, OK - EX) conta como contagem feita.
-STATUS_RUIM = {"NOK", "NOK - DIV"}
+# NOK / NOK - DIV = a contagem NÃO foi feita. OK - DIV = contagem feita OK, mas com divergência.
+# OK - EX = contagem feita, com excesso de divergência (não dá pra ajustar, mas foi feita). OK = contagem feita, sem ressalvas.
+# CONFIRMAR DIV = feita a 1ª contagem, aguardando a 2ª.
+STATUS_NAO_REALIZADA = {"NOK", "NOK - DIV"}
 STATUS_AGUARDANDO_2A = {"CONFIRMAR DIV"}
-STATUS_INVENTARIO_CLASSE = {"OK": "ok", "OK - DIV": "ok", "OK - EX": "ok", "CONFIRMAR DIV": "warn", "NOK": "bad", "NOK - DIV": "bad"}
+STATUS_COM_DIVERGENCIA = {"OK - DIV"}
+STATUS_INVENTARIO_CLASSE = {"OK": "ok", "OK - DIV": "warn", "OK - EX": "ok", "CONFIRMAR DIV": "warn", "NOK": "bad", "NOK - DIV": "bad"}
 BUCKET_PRIORIDADE = {
-    "Com divergência": 0, "Aguardando 2ª contagem": 1, "Não iniciado": 2,
-    "Parcial": 3, "OK com ajuste": 4, "Completo": 5,
+    "Não realizada": 0, "Aguardando 2ª contagem": 1, "Com divergência": 2,
+    "Não iniciado": 3, "Parcial": 4, "Completo": 5,
 }
 BUCKET_CLASSE = {
-    "Completo": "ok", "OK com ajuste": "ok", "Parcial": "warn", "Aguardando 2ª contagem": "warn",
-    "Com divergência": "bad", "Não iniciado": "",
+    "Completo": "ok", "Com divergência": "warn", "Parcial": "warn", "Aguardando 2ª contagem": "warn",
+    "Não realizada": "bad", "Não iniciado": "",
 }
 
 # filiais que não fazem contagem de chips (só aparelhos)
@@ -333,21 +334,23 @@ def bucket_filial(aparelhos, chips, tem_chip=True):
     if not tem_chip:
         if aparelhos is None:
             return "Não iniciado"
-        if aparelhos in STATUS_RUIM:
-            return "Com divergência"
+        if aparelhos in STATUS_NAO_REALIZADA:
+            return "Não realizada"
         if aparelhos in STATUS_AGUARDANDO_2A:
             return "Aguardando 2ª contagem"
-        return "OK com ajuste" if aparelhos == "OK - DIV" else "Completo"
+        if aparelhos in STATUS_COM_DIVERGENCIA:
+            return "Com divergência"
+        return "Completo"
     if aparelhos is None and chips is None:
         return "Não iniciado"
     if aparelhos is None or chips is None:
         return "Parcial"
-    if aparelhos in STATUS_RUIM or chips in STATUS_RUIM:
-        return "Com divergência"
+    if aparelhos in STATUS_NAO_REALIZADA or chips in STATUS_NAO_REALIZADA:
+        return "Não realizada"
     if aparelhos in STATUS_AGUARDANDO_2A or chips in STATUS_AGUARDANDO_2A:
         return "Aguardando 2ª contagem"
-    if aparelhos == "OK - DIV" or chips == "OK - DIV":
-        return "OK com ajuste"
+    if aparelhos in STATUS_COM_DIVERGENCIA or chips in STATUS_COM_DIVERGENCIA:
+        return "Com divergência"
     return "Completo"
 
 
@@ -373,15 +376,16 @@ inventario_filiais.sort(key=lambda f: (BUCKET_PRIORIDADE.get(f["bucket"], 5), f[
 
 inventario_resumo = {
     "total": len(inventario_filiais),
-    "completo": sum(1 for f in inventario_filiais if f["bucket"] in ("Completo", "OK com ajuste")),
-    "pendente": sum(1 for f in inventario_filiais if f["bucket"] in ("Não iniciado", "Parcial", "Aguardando 2ª contagem")),
+    "completo": sum(1 for f in inventario_filiais if f["bucket"] == "Completo"),
     "divergencia": sum(1 for f in inventario_filiais if f["bucket"] == "Com divergência"),
+    "nao_realizada": sum(1 for f in inventario_filiais if f["bucket"] == "Não realizada"),
+    "pendente": sum(1 for f in inventario_filiais if f["bucket"] in ("Não iniciado", "Parcial", "Aguardando 2ª contagem")),
 }
 
 inventario_buckets = {}
 for f in inventario_filiais:
     inventario_buckets[f["bucket"]] = inventario_buckets.get(f["bucket"], 0) + 1
-INVENTARIO_ORDEM_BUCKET = ["Completo", "OK com ajuste", "Parcial", "Aguardando 2ª contagem", "Com divergência", "Não iniciado"]
+INVENTARIO_ORDEM_BUCKET = ["Completo", "Com divergência", "Aguardando 2ª contagem", "Parcial", "Não iniciado", "Não realizada"]
 
 # ---- histórico: a planilha só guarda o dia atual, então construímos o histórico
 # nós mesmos, gravando o snapshot de cada dia num arquivo à parte a cada publicação.
@@ -983,8 +987,9 @@ html = rf"""<!DOCTYPE html>
   <div class="cards">
     <div class="card"><div class="label">Filiais</div><div class="value">{inventario_resumo['total']}</div></div>
     <div class="card ok"><div class="label">Completo</div><div class="value">{inventario_resumo['completo']}</div></div>
-    <div class="card warn"><div class="label">Pendente / Não iniciado</div><div class="value">{inventario_resumo['pendente']}</div></div>
-    <div class="card bad"><div class="label">Com divergência</div><div class="value">{inventario_resumo['divergencia']}</div></div>
+    <div class="card warn"><div class="label">Com divergência</div><div class="value">{inventario_resumo['divergencia']}</div></div>
+    <div class="card warn"><div class="label">Pendente / Aguardando</div><div class="value">{inventario_resumo['pendente']}</div></div>
+    <div class="card bad"><div class="label">Não realizada</div><div class="value">{inventario_resumo['nao_realizada']}</div></div>
   </div>
   <div class="charts">
     <div class="chart-box"><h4>Status geral das filiais <button class="chart-export-btn" data-chart-export="chart-inventario-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-inventario-status"></canvas></div></div>
@@ -1874,8 +1879,8 @@ new Chart(document.getElementById('chart-devolvidos-filial'), {{
 }});
 
 var CORES_BUCKET_INVENTARIO = {{
-  'Completo': COR_OK, 'OK com ajuste': COR_ACCENT, 'Parcial': COR_WARN, 'Aguardando 2ª contagem': COR_WARN,
-  'Com divergência': COR_BAD, 'Não iniciado': '#64748b'
+  'Completo': COR_OK, 'Com divergência': COR_WARN, 'Aguardando 2ª contagem': COR_WARN, 'Parcial': COR_WARN,
+  'Não realizada': COR_BAD, 'Não iniciado': '#64748b'
 }};
 new Chart(document.getElementById('chart-inventario-status'), {{
   type: 'doughnut',
