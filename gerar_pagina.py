@@ -303,12 +303,20 @@ ap_chip_rows = load_abs(INVENTARIO_FILE, "Resumo (AP. e CHIP)")
 data_contagem_raw = ap_chip_rows[0][1]
 data_contagem_str = data_str(data_contagem_raw) if data_contagem_raw else "-"
 
-# única coisa que conta como "não feito"/problema é NOK e NOK - DIV; o resto (OK, OK - DIV,
-# OK - EX, CONFIRMAR DIV) conta como contagem feita.
+# o que conta como "não feito"/problema é NOK e NOK - DIV (divergência real, contagem feita mas
+# não resolvida); CONFIRMAR DIV também é "não feito" (aguardando a 2ª contagem). O resto
+# (OK, OK - DIV, OK - EX) conta como contagem feita.
 STATUS_RUIM = {"NOK", "NOK - DIV"}
-STATUS_INVENTARIO_CLASSE = {"OK": "ok", "OK - DIV": "ok", "OK - EX": "ok", "CONFIRMAR DIV": "ok", "NOK": "bad", "NOK - DIV": "bad"}
-BUCKET_PRIORIDADE = {"Com divergência": 0, "Não iniciado": 1, "Parcial": 2, "OK com ajuste": 3, "Completo": 4}
-BUCKET_CLASSE = {"Completo": "ok", "OK com ajuste": "ok", "Parcial": "warn", "Com divergência": "bad", "Não iniciado": ""}
+STATUS_AGUARDANDO_2A = {"CONFIRMAR DIV"}
+STATUS_INVENTARIO_CLASSE = {"OK": "ok", "OK - DIV": "ok", "OK - EX": "ok", "CONFIRMAR DIV": "warn", "NOK": "bad", "NOK - DIV": "bad"}
+BUCKET_PRIORIDADE = {
+    "Com divergência": 0, "Aguardando 2ª contagem": 1, "Não iniciado": 2,
+    "Parcial": 3, "OK com ajuste": 4, "Completo": 5,
+}
+BUCKET_CLASSE = {
+    "Completo": "ok", "OK com ajuste": "ok", "Parcial": "warn", "Aguardando 2ª contagem": "warn",
+    "Com divergência": "bad", "Não iniciado": "",
+}
 
 # filiais que não fazem contagem de chips (só aparelhos)
 FILIAIS_SEM_CONTAGEM_CHIP = {"OUTLET MAUA"}
@@ -327,6 +335,8 @@ def bucket_filial(aparelhos, chips, tem_chip=True):
             return "Não iniciado"
         if aparelhos in STATUS_RUIM:
             return "Com divergência"
+        if aparelhos in STATUS_AGUARDANDO_2A:
+            return "Aguardando 2ª contagem"
         return "OK com ajuste" if aparelhos == "OK - DIV" else "Completo"
     if aparelhos is None and chips is None:
         return "Não iniciado"
@@ -334,6 +344,8 @@ def bucket_filial(aparelhos, chips, tem_chip=True):
         return "Parcial"
     if aparelhos in STATUS_RUIM or chips in STATUS_RUIM:
         return "Com divergência"
+    if aparelhos in STATUS_AGUARDANDO_2A or chips in STATUS_AGUARDANDO_2A:
+        return "Aguardando 2ª contagem"
     if aparelhos == "OK - DIV" or chips == "OK - DIV":
         return "OK com ajuste"
     return "Completo"
@@ -362,14 +374,14 @@ inventario_filiais.sort(key=lambda f: (BUCKET_PRIORIDADE.get(f["bucket"], 5), f[
 inventario_resumo = {
     "total": len(inventario_filiais),
     "completo": sum(1 for f in inventario_filiais if f["bucket"] in ("Completo", "OK com ajuste")),
-    "pendente": sum(1 for f in inventario_filiais if f["bucket"] in ("Não iniciado", "Parcial")),
+    "pendente": sum(1 for f in inventario_filiais if f["bucket"] in ("Não iniciado", "Parcial", "Aguardando 2ª contagem")),
     "divergencia": sum(1 for f in inventario_filiais if f["bucket"] == "Com divergência"),
 }
 
 inventario_buckets = {}
 for f in inventario_filiais:
     inventario_buckets[f["bucket"]] = inventario_buckets.get(f["bucket"], 0) + 1
-INVENTARIO_ORDEM_BUCKET = ["Completo", "OK com ajuste", "Parcial", "Com divergência", "Não iniciado"]
+INVENTARIO_ORDEM_BUCKET = ["Completo", "OK com ajuste", "Parcial", "Aguardando 2ª contagem", "Com divergência", "Não iniciado"]
 
 # ---- histórico: a planilha só guarda o dia atual, então construímos o histórico
 # nós mesmos, gravando o snapshot de cada dia num arquivo à parte a cada publicação.
@@ -1862,7 +1874,7 @@ new Chart(document.getElementById('chart-devolvidos-filial'), {{
 }});
 
 var CORES_BUCKET_INVENTARIO = {{
-  'Completo': COR_OK, 'OK com ajuste': COR_ACCENT, 'Parcial': COR_WARN,
+  'Completo': COR_OK, 'OK com ajuste': COR_ACCENT, 'Parcial': COR_WARN, 'Aguardando 2ª contagem': COR_WARN,
   'Com divergência': COR_BAD, 'Não iniciado': '#64748b'
 }};
 new Chart(document.getElementById('chart-inventario-status'), {{
