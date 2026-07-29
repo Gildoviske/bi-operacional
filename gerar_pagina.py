@@ -302,6 +302,7 @@ inventario_mtime = mtime_str_abs(INVENTARIO_FILE)
 ap_chip_rows = load_abs(INVENTARIO_FILE, "Resumo (AP. e CHIP)")
 data_contagem_raw = ap_chip_rows[0][1]
 data_contagem_str = data_str(data_contagem_raw) if data_contagem_raw else "-"
+eh_quarta_hoje = data_contagem_str != "-" and datetime.strptime(data_contagem_str, "%d/%m/%Y").weekday() == 2
 
 # NOK / NOK - DIV = a contagem NÃO foi feita. OK - DIV = contagem feita OK, mas com divergência.
 # OK - EX = contagem feita, com excesso de divergência (não dá pra ajustar, mas foi feita). OK = contagem feita, sem ressalvas.
@@ -460,6 +461,11 @@ def atualizar_historico_inventario(data_hoje, filiais):
         return historico_existente
     historico = json.loads(HISTORICO_PATH.read_text(encoding="utf-8")) if HISTORICO_PATH.exists() else []
     historico = [h for h in historico if h["data"] != data_hoje]
+    # quarta-feira não tem contagem de aparelhos/chips (só acessórios) — não entra no histórico,
+    # senão "puxa" a taxa de conclusão pra baixo com um dia que nem deveria ser contado
+    if datetime.strptime(data_hoje, "%d/%m/%Y").weekday() == 2:
+        HISTORICO_PATH.write_text(json.dumps(historico, ensure_ascii=False), encoding="utf-8")
+        return historico
     data_ts = int(datetime.strptime(data_hoje, "%d/%m/%Y").timestamp() * 1000)
     for f in filiais:
         historico.append({
@@ -724,6 +730,40 @@ def linhas_inventario_acessorios():
             )
         )
     return "\n".join(out)
+
+
+def bloco_status_aparelhos_chips():
+    if eh_quarta_hoje:
+        return """
+  <div style="background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:20px; color:var(--muted);">
+    📅 <strong>Hoje é quarta-feira</strong> — não há contagem de Aparelhos e Chips (só de Acessórios; confira a seção logo abaixo). O último dia com contagem continua disponível no Histórico.
+  </div>
+"""
+    return f"""
+  <div class="cards">
+    <div class="card"><div class="label">Filiais</div><div class="value">{inventario_resumo['total']}</div></div>
+    <div class="card ok"><div class="label">Completo</div><div class="value">{inventario_resumo['completo']}</div></div>
+    <div class="card warn"><div class="label">Com divergência</div><div class="value">{inventario_resumo['divergencia']}</div></div>
+    <div class="card warn"><div class="label">Pendente / Aguardando</div><div class="value">{inventario_resumo['pendente']}</div></div>
+    <div class="card bad"><div class="label">Não realizada</div><div class="value">{inventario_resumo['nao_realizada']}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box"><h4>Status geral das filiais <button class="chart-export-btn" data-chart-export="chart-inventario-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-inventario-status"></canvas></div></div>
+  </div>
+  <h3>📋 Status por filial</h3>
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-inventarios" placeholder="Filtrar por filial, área ou responsável...">
+    <button class="table-export-btn" data-export="tbl-inventarios">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-inventarios" class="sortable">
+    <thead><tr><th>Filial</th><th>Área</th><th>Aparelhos</th><th>Chips</th><th>Responsável</th><th>Status Geral</th></tr></thead>
+    <tbody>
+    {linhas_inventario()}
+    </tbody>
+  </table>
+  </div>
+"""
 
 
 def secao_acessorios(id_, titulo, mtime, resumo, prefixo):
@@ -1119,29 +1159,7 @@ html = rf"""<!DOCTYPE html>
 <section id="inventarios">
   <h2>📋 Inventários — Aparelhos e Chips (Diário)</h2>
   <p class="secao-mtime">🕒 Planilha atualizada em {inventario_mtime} · Contagem referente a {data_contagem_str}</p>
-  <div class="cards">
-    <div class="card"><div class="label">Filiais</div><div class="value">{inventario_resumo['total']}</div></div>
-    <div class="card ok"><div class="label">Completo</div><div class="value">{inventario_resumo['completo']}</div></div>
-    <div class="card warn"><div class="label">Com divergência</div><div class="value">{inventario_resumo['divergencia']}</div></div>
-    <div class="card warn"><div class="label">Pendente / Aguardando</div><div class="value">{inventario_resumo['pendente']}</div></div>
-    <div class="card bad"><div class="label">Não realizada</div><div class="value">{inventario_resumo['nao_realizada']}</div></div>
-  </div>
-  <div class="charts">
-    <div class="chart-box"><h4>Status geral das filiais <button class="chart-export-btn" data-chart-export="chart-inventario-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-inventario-status"></canvas></div></div>
-  </div>
-  <h3>📋 Status por filial</h3>
-  <div class="table-toolbar">
-    <input class="filtro" data-target="tbl-inventarios" placeholder="Filtrar por filial, área ou responsável...">
-    <button class="table-export-btn" data-export="tbl-inventarios">📥 Exportar Excel</button>
-  </div>
-  <div class="table-wrap">
-  <table id="tbl-inventarios" class="sortable">
-    <thead><tr><th>Filial</th><th>Área</th><th>Aparelhos</th><th>Chips</th><th>Responsável</th><th>Status Geral</th></tr></thead>
-    <tbody>
-    {linhas_inventario()}
-    </tbody>
-  </table>
-  </div>
+  {bloco_status_aparelhos_chips()}
 
   <h2 style="margin-top:40px;">🧩 Inventário de Acessórios (Semanal — Quartas-feiras)</h2>
   <p class="secao-mtime">🕒 Contagem referente a {data_contagem_acess_str} · atualiza só às quartas-feiras, nos outros dias mostra o último resultado</p>
@@ -2106,17 +2124,19 @@ var CORES_BUCKET_INVENTARIO = {{
   'Completo': COR_OK, 'Com divergência': COR_WARN, 'Aguardando 2ª contagem': COR_WARN, 'Parcial': COR_WARN,
   'Não realizada': COR_BAD, 'Não iniciado': '#64748b'
 }};
-new Chart(document.getElementById('chart-inventario-status'), {{
-  type: 'doughnut',
-  data: {{
-    labels: CHART_DATA.inventarioBuckets.labels,
-    datasets: [{{
-      data: CHART_DATA.inventarioBuckets.values,
-      backgroundColor: CHART_DATA.inventarioBuckets.labels.map(function(l) {{ return CORES_BUCKET_INVENTARIO[l] || COR_ACCENT; }})
-    }}]
-  }},
-  options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
-}});
+if (document.getElementById('chart-inventario-status')) {{
+  new Chart(document.getElementById('chart-inventario-status'), {{
+    type: 'doughnut',
+    data: {{
+      labels: CHART_DATA.inventarioBuckets.labels,
+      datasets: [{{
+        data: CHART_DATA.inventarioBuckets.values,
+        backgroundColor: CHART_DATA.inventarioBuckets.labels.map(function(l) {{ return CORES_BUCKET_INVENTARIO[l] || COR_ACCENT; }})
+      }}]
+    }},
+    options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
+  }});
+}}
 
 new Chart(document.getElementById('chart-historico-taxa'), {{
   type: 'bar',
