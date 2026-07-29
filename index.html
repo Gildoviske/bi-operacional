@@ -117,7 +117,7 @@
   </div>
   <div class="badge-atualizacao">
     <div class="data">🕒 Atualizado em 29/07/2026</div>
-    <div class="gerado">Página gerada em 29/07/2026 11:41</div>
+    <div class="gerado">Página gerada em 29/07/2026 11:52</div>
   </div>
 </header>
 <main>
@@ -472,6 +472,7 @@
 <section id="inventarios">
   <h2>📋 Inventários — Aparelhos e Chips (Diário)</h2>
   <p class="secao-mtime">🕒 Planilha atualizada em 29/07/2026 às 11:24 · Contagem referente a 30/07/2026</p>
+  
   <div class="cards">
     <div class="card"><div class="label">Filiais</div><div class="value">35</div></div>
     <div class="card ok"><div class="label">Completo</div><div class="value">0</div></div>
@@ -529,6 +530,7 @@
     </tbody>
   </table>
   </div>
+
 
   <h2 style="margin-top:40px;">🧩 Inventário de Acessórios (Semanal — Quartas-feiras)</h2>
   <p class="secao-mtime">🕒 Contagem referente a 29/07/2026 · atualiza só às quartas-feiras, nos outros dias mostra o último resultado</p>
@@ -1527,17 +1529,19 @@ var CORES_BUCKET_INVENTARIO = {
   'Completo': COR_OK, 'Com divergência': COR_WARN, 'Aguardando 2ª contagem': COR_WARN, 'Parcial': COR_WARN,
   'Não realizada': COR_BAD, 'Não iniciado': '#64748b'
 };
-new Chart(document.getElementById('chart-inventario-status'), {
-  type: 'doughnut',
-  data: {
-    labels: CHART_DATA.inventarioBuckets.labels,
-    datasets: [{
-      data: CHART_DATA.inventarioBuckets.values,
-      backgroundColor: CHART_DATA.inventarioBuckets.labels.map(function(l) { return CORES_BUCKET_INVENTARIO[l] || COR_ACCENT; })
-    }]
-  },
-  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-});
+if (document.getElementById('chart-inventario-status')) {
+  new Chart(document.getElementById('chart-inventario-status'), {
+    type: 'doughnut',
+    data: {
+      labels: CHART_DATA.inventarioBuckets.labels,
+      datasets: [{
+        data: CHART_DATA.inventarioBuckets.values,
+        backgroundColor: CHART_DATA.inventarioBuckets.labels.map(function(l) { return CORES_BUCKET_INVENTARIO[l] || COR_ACCENT; })
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+  });
+}
 
 new Chart(document.getElementById('chart-historico-taxa'), {
   type: 'bar',
