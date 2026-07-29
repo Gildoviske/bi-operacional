@@ -1873,9 +1873,12 @@ new Chart(document.getElementById('chart-devolvidos-filial'), {{
   type: 'bar',
   data: {{
     labels: CHART_DATA.devolvidos.labels,
-    datasets: [{{ label: 'Saldo', data: CHART_DATA.devolvidos.saldo, backgroundColor: COR_BAD }}]
+    datasets: [{{ label: 'Saldo (unidades)', data: CHART_DATA.devolvidos.saldo, backgroundColor: COR_BAD }}]
   }},
-  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+  options: {{
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }},
+    scales: {{ x: {{ type: 'logarithmic', title: {{ display: true, text: 'Saldo (escala logarítmica — um chip com milhares de unidades em Estoque Matriz dominaria a escala linear)', color: '#94a3b8', font: {{ size: 10 }} }} }} }}
+  }}
 }});
 
 var CORES_BUCKET_INVENTARIO = {{
