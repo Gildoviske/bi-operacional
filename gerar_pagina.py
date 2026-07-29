@@ -330,6 +330,11 @@ def extrair_area(responsavel):
     return m.group(1) if m else "-"
 
 
+def status_feito(valor):
+    """Foi realizado (qualquer coisa exceto em branco, NOK ou NOK - DIV)."""
+    return valor is not None and valor not in STATUS_NAO_REALIZADA
+
+
 def bucket_filial(aparelhos, chips, tem_chip=True):
     if not tem_chip:
         if aparelhos is None:
@@ -341,12 +346,24 @@ def bucket_filial(aparelhos, chips, tem_chip=True):
         if aparelhos in STATUS_COM_DIVERGENCIA:
             return "Com divergência"
         return "Completo"
+
     if aparelhos is None and chips is None:
         return "Não iniciado"
-    if aparelhos is None or chips is None:
+
+    ap_feito = status_feito(aparelhos)
+    ch_feito = status_feito(chips)
+
+    if not ap_feito and not ch_feito:
+        # nenhum dos dois foi de fato realizado (branco e/ou NOK/NOK - DIV)
+        if aparelhos in STATUS_NAO_REALIZADA or chips in STATUS_NAO_REALIZADA:
+            return "Não realizada"
+        return "Não iniciado"
+
+    if ap_feito != ch_feito:
+        # fez um dos dois (aparelhos ou chips), o outro ficou em branco ou NOK -> pelo menos metade feito
         return "Parcial"
-    if aparelhos in STATUS_NAO_REALIZADA or chips in STATUS_NAO_REALIZADA:
-        return "Não realizada"
+
+    # os dois foram realizados
     if aparelhos in STATUS_AGUARDANDO_2A or chips in STATUS_AGUARDANDO_2A:
         return "Aguardando 2ª contagem"
     if aparelhos in STATUS_COM_DIVERGENCIA or chips in STATUS_COM_DIVERGENCIA:
