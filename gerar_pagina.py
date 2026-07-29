@@ -433,17 +433,23 @@ historico_inventario = atualizar_historico_inventario(data_contagem_str, inventa
 historico_dias = sorted(set(h["data"] for h in historico_inventario), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
 historico_primeiro_dia = historico_dias[0] if historico_dias else "-"
 
+# peso de cada status pra taxa de conclusão: feito (mesmo com divergência/aguardando) = 100%,
+# parcial (só aparelhos ou só chips) = 50%, não feito/não iniciado = 0%
+BUCKET_PESO = {
+    "Completo": 1.0, "Com divergência": 1.0, "Aguardando 2ª contagem": 1.0,
+    "Parcial": 0.5, "Não iniciado": 0.0, "Não realizada": 0.0,
+}
+
 historico_por_filial = {}
 for h in historico_inventario:
-    stats = historico_por_filial.setdefault(h["filial"], {"dias": 0, "completos": 0})
+    stats = historico_por_filial.setdefault(h["filial"], {"dias": 0, "pontos": 0.0})
     stats["dias"] += 1
-    if h["bucket"] in ("Completo", "OK com ajuste"):
-        stats["completos"] += 1
+    stats["pontos"] += BUCKET_PESO.get(h["bucket"], 0.0)
 
 historico_taxas = []
 for filial, stats in historico_por_filial.items():
-    taxa = round(100 * stats["completos"] / stats["dias"], 1) if stats["dias"] else 0
-    historico_taxas.append({"filial": filial, "dias": stats["dias"], "completos": stats["completos"], "taxa": taxa})
+    taxa = round(100 * stats["pontos"] / stats["dias"], 1) if stats["dias"] else 0
+    historico_taxas.append({"filial": filial, "dias": stats["dias"], "taxa": taxa})
 historico_taxas.sort(key=lambda x: x["taxa"])
 
 historico_resumo = {
