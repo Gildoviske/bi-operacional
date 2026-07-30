@@ -6,7 +6,6 @@ Lê os 3 arquivos em "I:\\Meu Drive\\CONTROLE COMPRAS" e grava index.html
 nesta mesma pasta (bi-web), pronta para publicar no GitHub Pages.
 """
 import json
-import re
 import openpyxl
 from datetime import datetime
 from pathlib import Path
@@ -42,16 +41,6 @@ def load_dicts(arquivo, aba):
 
 def mtime_str(arquivo):
     ts = (BASE / arquivo).stat().st_mtime
-    return datetime.fromtimestamp(ts).strftime("%d/%m/%Y às %H:%M")
-
-
-def load_abs(caminho, aba):
-    wb = openpyxl.load_workbook(caminho, data_only=True, read_only=True, keep_vba=caminho.suffix == ".xlsm")
-    return list(wb[aba].iter_rows(values_only=True))
-
-
-def mtime_str_abs(caminho):
-    ts = caminho.stat().st_mtime
     return datetime.fromtimestamp(ts).strftime("%d/%m/%Y às %H:%M")
 
 
@@ -295,277 +284,6 @@ devolvidos_resumo = {
 }
 devolvidos_json = json.dumps(devolvidos_itens, ensure_ascii=False)
 
-# ---------------------------------------------------------- INVENTÁRIOS
-INVENTARIO_FILE = Path(r"H:\Meu Drive\Controle de inventário\Controle de inventario automatizada.xlsm")
-inventario_mtime = mtime_str_abs(INVENTARIO_FILE)
-
-ap_chip_rows = load_abs(INVENTARIO_FILE, "Resumo (AP. e CHIP)")
-data_contagem_raw = ap_chip_rows[0][1]
-data_contagem_str = data_str(data_contagem_raw) if data_contagem_raw else "-"
-eh_quarta_hoje = data_contagem_str != "-" and datetime.strptime(data_contagem_str, "%d/%m/%Y").weekday() == 2
-
-# NOK / NOK - DIV = a contagem NÃO foi feita. OK - DIV = contagem feita OK, mas com divergência.
-# OK - EX = contagem feita, com excesso de divergência (não dá pra ajustar, mas foi feita). OK = contagem feita, sem ressalvas.
-# CONFIRMAR DIV = feita a 1ª contagem, aguardando a 2ª.
-STATUS_NAO_REALIZADA = {"NOK", "NOK - DIV"}
-STATUS_AGUARDANDO_2A = {"CONFIRMAR DIV"}
-STATUS_COM_DIVERGENCIA = {"OK - DIV"}
-STATUS_INVENTARIO_CLASSE = {"OK": "ok", "OK - DIV": "warn", "OK - EX": "ok", "CONFIRMAR DIV": "warn", "NOK": "bad", "NOK - DIV": "bad"}
-BUCKET_PRIORIDADE = {
-    "Não realizada": 0, "Aguardando 2ª contagem": 1, "Com divergência": 2,
-    "Não iniciado": 3, "Parcial": 4, "Completo": 5,
-}
-BUCKET_CLASSE = {
-    "Completo": "ok", "Com divergência": "warn", "Parcial": "warn", "Aguardando 2ª contagem": "warn",
-    "Não realizada": "bad", "Não iniciado": "",
-}
-
-# filiais que não fazem contagem de chips (só aparelhos)
-FILIAIS_SEM_CONTAGEM_CHIP = {"OUTLET MAUA"}
-
-
-def extrair_area(responsavel):
-    if not responsavel:
-        return "-"
-    m = re.search(r"\(([^)]+)\)\s*$", responsavel.strip())
-    return m.group(1) if m else "-"
-
-
-def status_feito(valor):
-    """Foi realizado (qualquer coisa exceto em branco, NOK ou NOK - DIV)."""
-    return valor is not None and valor not in STATUS_NAO_REALIZADA
-
-
-def bucket_filial(aparelhos, chips, tem_chip=True):
-    if not tem_chip:
-        if aparelhos is None:
-            return "Não iniciado"
-        if aparelhos in STATUS_NAO_REALIZADA:
-            return "Não realizada"
-        if aparelhos in STATUS_AGUARDANDO_2A:
-            return "Aguardando 2ª contagem"
-        if aparelhos in STATUS_COM_DIVERGENCIA:
-            return "Com divergência"
-        return "Completo"
-
-    if aparelhos is None and chips is None:
-        return "Não iniciado"
-
-    ap_feito = status_feito(aparelhos)
-    ch_feito = status_feito(chips)
-
-    if not ap_feito and not ch_feito:
-        # nenhum dos dois foi de fato realizado (branco e/ou NOK/NOK - DIV)
-        if aparelhos in STATUS_NAO_REALIZADA or chips in STATUS_NAO_REALIZADA:
-            return "Não realizada"
-        return "Não iniciado"
-
-    if ap_feito != ch_feito:
-        # fez um dos dois (aparelhos ou chips), o outro ficou em branco ou NOK -> pelo menos metade feito
-        return "Parcial"
-
-    # os dois foram realizados
-    if aparelhos in STATUS_AGUARDANDO_2A or chips in STATUS_AGUARDANDO_2A:
-        return "Aguardando 2ª contagem"
-    if aparelhos in STATUS_COM_DIVERGENCIA or chips in STATUS_COM_DIVERGENCIA:
-        return "Com divergência"
-    return "Completo"
-
-
-inventario_filiais = []
-for r in ap_chip_rows[2:]:
-    filial = r[0]
-    if not filial:
-        continue
-    aparelhos, chips, qtd, responsavel = r[1], r[2], r[3], r[4]
-    tem_chip = filial not in FILIAIS_SEM_CONTAGEM_CHIP
-    bucket = bucket_filial(aparelhos, chips, tem_chip)
-    inventario_filiais.append({
-        "filial": filial, "area": extrair_area(responsavel),
-        "aparelhos": aparelhos or "PENDENTE",
-        "aparelhos_cls": STATUS_INVENTARIO_CLASSE.get(aparelhos, "warn" if aparelhos is None else ""),
-        "chips": (chips or "PENDENTE") if tem_chip else "N/A",
-        "chips_cls": (STATUS_INVENTARIO_CLASSE.get(chips, "warn" if chips is None else "")) if tem_chip else "",
-        "qtd": qtd if qtd is not None else "-",
-        "responsavel": responsavel or "-",
-        "bucket": bucket, "bucket_cls": BUCKET_CLASSE.get(bucket, ""),
-    })
-inventario_filiais.sort(key=lambda f: (BUCKET_PRIORIDADE.get(f["bucket"], 5), f["filial"]))
-
-inventario_resumo = {
-    "total": len(inventario_filiais),
-    "completo": sum(1 for f in inventario_filiais if f["bucket"] == "Completo"),
-    "divergencia": sum(1 for f in inventario_filiais if f["bucket"] == "Com divergência"),
-    "nao_realizada": sum(1 for f in inventario_filiais if f["bucket"] == "Não realizada"),
-    "pendente": sum(1 for f in inventario_filiais if f["bucket"] in ("Não iniciado", "Parcial", "Aguardando 2ª contagem")),
-}
-
-inventario_buckets = {}
-for f in inventario_filiais:
-    inventario_buckets[f["bucket"]] = inventario_buckets.get(f["bucket"], 0) + 1
-INVENTARIO_ORDEM_BUCKET = ["Completo", "Com divergência", "Aguardando 2ª contagem", "Parcial", "Não iniciado", "Não realizada"]
-
-# ------------------------------------------------ INVENTÁRIO DE ACESSÓRIOS (semanal, quartas-feiras)
-acess_rows = load_abs(INVENTARIO_FILE, "Resumo (ACESS.)")
-data_contagem_acess_raw = acess_rows[0][1]
-data_contagem_acess_str = data_str(data_contagem_acess_raw) if data_contagem_acess_raw else "-"
-
-acessorios_inv_filiais = []
-for r in acess_rows[2:]:
-    filial = r[0]
-    if not filial:
-        continue
-    diversos, qtd, responsavel = r[1], r[2], r[5]
-    if diversos is None:
-        bucket_a = "Não iniciado"
-        status_cls = "warn"
-    elif qtd not in (None, 0):
-        bucket_a = "Com divergência"
-        status_cls = "warn"
-    else:
-        bucket_a = "Completo"
-        status_cls = "ok"
-    acessorios_inv_filiais.append({
-        "filial": filial, "area": extrair_area(responsavel),
-        "status": diversos or "PENDENTE", "status_cls": status_cls,
-        "qtd": qtd if qtd is not None else "-",
-        "responsavel": responsavel or "-",
-        "bucket": bucket_a, "bucket_cls": BUCKET_CLASSE.get(bucket_a, ""),
-    })
-acessorios_inv_filiais.sort(key=lambda f: (BUCKET_PRIORIDADE.get(f["bucket"], 5), f["filial"]))
-
-acessorios_inv_resumo = {
-    "total": len(acessorios_inv_filiais),
-    "completo": sum(1 for f in acessorios_inv_filiais if f["bucket"] == "Completo"),
-    "divergencia": sum(1 for f in acessorios_inv_filiais if f["bucket"] == "Com divergência"),
-    "pendente": sum(1 for f in acessorios_inv_filiais if f["bucket"] == "Não iniciado"),
-}
-
-acessorios_inv_buckets = {}
-for f in acessorios_inv_filiais:
-    acessorios_inv_buckets[f["bucket"]] = acessorios_inv_buckets.get(f["bucket"], 0) + 1
-acessorios_inv_por_filial = {f["filial"]: f for f in acessorios_inv_filiais}
-
-# ---- histórico: a planilha só guarda o dia atual, então construímos o histórico
-# nós mesmos, gravando o snapshot de cada dia num arquivo à parte a cada publicação.
-# aparelhos/chips (seg/ter/qui/sex) e acessórios (só quarta) têm datas próprias e independentes,
-# por isso ficam em arquivos de histórico separados — misturar os dois numa linha só causava
-# status "grudado" de dias diferentes.
-HISTORICO_PATH = Path(__file__).resolve().parent / "historico_inventario.json"
-HISTORICO_ACESSORIOS_PATH = Path(__file__).resolve().parent / "historico_inventario_acessorios.json"
-
-
-def atualizar_historico_inventario(data_hoje, filiais):
-    if not data_hoje or data_hoje == "-":
-        historico_existente = json.loads(HISTORICO_PATH.read_text(encoding="utf-8")) if HISTORICO_PATH.exists() else []
-        return historico_existente
-    historico = json.loads(HISTORICO_PATH.read_text(encoding="utf-8")) if HISTORICO_PATH.exists() else []
-    historico = [h for h in historico if h["data"] != data_hoje]
-    # quarta-feira não tem contagem de aparelhos/chips (só acessórios) — não entra no histórico,
-    # senão "puxa" a taxa de conclusão pra baixo com um dia que nem deveria ser contado
-    if datetime.strptime(data_hoje, "%d/%m/%Y").weekday() == 2:
-        HISTORICO_PATH.write_text(json.dumps(historico, ensure_ascii=False), encoding="utf-8")
-        return historico
-    data_ts = int(datetime.strptime(data_hoje, "%d/%m/%Y").timestamp() * 1000)
-    for f in filiais:
-        historico.append({
-            "data": data_hoje, "data_ts": data_ts, "filial": f["filial"], "area": f["area"],
-            "aparelhos": f["aparelhos"], "chips": f["chips"],
-            "bucket": f["bucket"], "bucket_cls": f["bucket_cls"],
-        })
-    datas_unicas = sorted(set(h["data"] for h in historico), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
-    datas_manter = set(datas_unicas[-60:])
-    historico = [h for h in historico if h["data"] in datas_manter]
-    HISTORICO_PATH.write_text(json.dumps(historico, ensure_ascii=False), encoding="utf-8")
-    return historico
-
-
-def atualizar_historico_acessorios(data_contagem, filiais):
-    if not data_contagem or data_contagem == "-":
-        existente = json.loads(HISTORICO_ACESSORIOS_PATH.read_text(encoding="utf-8")) if HISTORICO_ACESSORIOS_PATH.exists() else []
-        return existente
-    historico = json.loads(HISTORICO_ACESSORIOS_PATH.read_text(encoding="utf-8")) if HISTORICO_ACESSORIOS_PATH.exists() else []
-    historico = [h for h in historico if h["data"] != data_contagem]
-    data_ts = int(datetime.strptime(data_contagem, "%d/%m/%Y").timestamp() * 1000)
-    for f in filiais:
-        historico.append({
-            "data": data_contagem, "data_ts": data_ts, "filial": f["filial"], "area": f["area"],
-            "status": f["status"], "qtd": f["qtd"],
-            "bucket": f["bucket"], "bucket_cls": f["bucket_cls"],
-        })
-    datas_unicas = sorted(set(h["data"] for h in historico), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
-    datas_manter = set(datas_unicas[-20:])  # ~20 quartas-feiras (uns 5 meses)
-    historico = [h for h in historico if h["data"] in datas_manter]
-    HISTORICO_ACESSORIOS_PATH.write_text(json.dumps(historico, ensure_ascii=False), encoding="utf-8")
-    return historico
-
-
-historico_inventario = atualizar_historico_inventario(data_contagem_str, inventario_filiais)
-historico_dias = sorted(set(h["data"] for h in historico_inventario), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
-historico_primeiro_dia = historico_dias[0] if historico_dias else "-"
-
-historico_acessorios = atualizar_historico_acessorios(data_contagem_acess_str, acessorios_inv_filiais)
-historico_acessorios_dias = sorted(set(h["data"] for h in historico_acessorios), key=lambda d: datetime.strptime(d, "%d/%m/%Y"))
-historico_acessorios_primeiro_dia = historico_acessorios_dias[0] if historico_acessorios_dias else "-"
-
-# peso de cada status pra taxa de conclusão: feito (mesmo com divergência/aguardando) = 100%,
-# parcial (só aparelhos ou só chips) = 50%, não feito/não iniciado = 0%
-BUCKET_PESO = {
-    "Completo": 1.0, "Com divergência": 1.0, "Aguardando 2ª contagem": 1.0,
-    "Parcial": 0.5, "Não iniciado": 0.0, "Não realizada": 0.0,
-}
-
-# o dia mais recente registrado pode ainda estar em andamento (a contagem só termina às 17h),
-# então ele fica de fora da média histórica — senão um dia pela metade derruba a taxa de quem já
-# fechou 100% nos dias anteriores. Só usa esse último dia se for o único que existe.
-dias_fechados = set(historico_dias[:-1]) if len(historico_dias) > 1 else set(historico_dias)
-
-historico_por_filial = {}
-for h in historico_inventario:
-    if h["data"] not in dias_fechados:
-        continue
-    stats = historico_por_filial.setdefault(h["filial"], {"dias": 0, "pontos": 0.0})
-    stats["dias"] += 1
-    stats["pontos"] += BUCKET_PESO.get(h["bucket"], 0.0)
-
-historico_taxas = []
-for filial, stats in historico_por_filial.items():
-    taxa = round(100 * stats["pontos"] / stats["dias"], 1) if stats["dias"] else 0
-    historico_taxas.append({"filial": filial, "dias": stats["dias"], "taxa": taxa})
-historico_taxas.sort(key=lambda x: x["taxa"])
-
-historico_resumo = {
-    "dias_registrados": len(historico_dias),
-    "registros": len(historico_inventario),
-    "taxa_media": round(sum(t["taxa"] for t in historico_taxas) / len(historico_taxas), 1) if historico_taxas else 0,
-}
-
-# taxa de acessórios calculada em cima do histórico próprio de acessórios (uma entrada por
-# quarta-feira efetivamente registrada, nada de misturar com os dias de aparelhos/chips); a
-# quarta-feira mais recente também fica de fora se ainda não fechou (mesma lógica acima)
-quartas_fechadas = set(historico_acessorios_dias[:-1]) if len(historico_acessorios_dias) > 1 else set(historico_acessorios_dias)
-
-historico_acessorios_por_filial = {}
-for h in historico_acessorios:
-    if h["data"] not in quartas_fechadas:
-        continue
-    stats = historico_acessorios_por_filial.setdefault(h["filial"], {"dias": 0, "pontos": 0.0})
-    stats["dias"] += 1
-    stats["pontos"] += BUCKET_PESO.get(h["bucket"], 0.0)
-
-historico_acessorios_taxas = []
-for filial, stats in historico_acessorios_por_filial.items():
-    taxa = round(100 * stats["pontos"] / stats["dias"], 1) if stats["dias"] else 0
-    historico_acessorios_taxas.append({"filial": filial, "dias": stats["dias"], "taxa": taxa})
-historico_acessorios_taxas.sort(key=lambda x: x["taxa"])
-
-historico_acessorios_resumo = {
-    "quartas_registradas": len(historico_acessorios_dias),
-    "taxa_media": round(sum(t["taxa"] for t in historico_acessorios_taxas) / len(historico_acessorios_taxas), 1) if historico_acessorios_taxas else 0,
-}
-historico_json = json.dumps(historico_inventario, ensure_ascii=False)
-historico_acessorios_json = json.dumps(historico_acessorios, ensure_ascii=False)
-
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
 chart_data = {
@@ -615,22 +333,6 @@ chart_data = {
     "devolvidos": {
         "labels": [f[0] for f in devolvidos_filiais_ordenadas],
         "saldo": [f[1] for f in devolvidos_filiais_ordenadas],
-    },
-    "inventarioBuckets": {
-        "labels": [b for b in INVENTARIO_ORDEM_BUCKET if inventario_buckets.get(b)],
-        "values": [inventario_buckets.get(b, 0) for b in INVENTARIO_ORDEM_BUCKET if inventario_buckets.get(b)],
-    },
-    "historicoTaxas": {
-        "labels": [t["filial"] for t in historico_taxas],
-        "taxa": [t["taxa"] for t in historico_taxas],
-    },
-    "acessoriosInvBuckets": {
-        "labels": [b for b in INVENTARIO_ORDEM_BUCKET if acessorios_inv_buckets.get(b)],
-        "values": [acessorios_inv_buckets.get(b, 0) for b in INVENTARIO_ORDEM_BUCKET if acessorios_inv_buckets.get(b)],
-    },
-    "historicoAcessoriosTaxas": {
-        "labels": [t["filial"] for t in historico_acessorios_taxas],
-        "taxa": [t["taxa"] for t in historico_acessorios_taxas],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -711,71 +413,6 @@ def linhas_amet():
         )
     return "\n".join(out)
 
-
-def linhas_inventario():
-    out = []
-    for f in inventario_filiais:
-        out.append(
-            "<tr><td>{fil}</td><td>{area}</td>"
-            "<td><span class='pill {ap_cls}'>{ap}</span></td>"
-            "<td><span class='pill {ch_cls}'>{ch}</span></td>"
-            "<td>{resp}</td>"
-            "<td><span class='pill {b_cls}'>{b}</span></td></tr>".format(
-                fil=f["filial"], area=f["area"], ap=f["aparelhos"], ap_cls=f["aparelhos_cls"],
-                ch=f["chips"], ch_cls=f["chips_cls"], resp=f["responsavel"],
-                b=f["bucket"], b_cls=f["bucket_cls"]
-            )
-        )
-    return "\n".join(out)
-
-
-def linhas_inventario_acessorios():
-    out = []
-    for f in acessorios_inv_filiais:
-        out.append(
-            "<tr><td>{fil}</td><td>{area}</td>"
-            "<td><span class='pill {s_cls}'>{s}</span></td>"
-            "<td class='num'>{qtd}</td><td>{resp}</td>"
-            "<td><span class='pill {b_cls}'>{b}</span></td></tr>".format(
-                fil=f["filial"], area=f["area"], s=f["status"], s_cls=f["status_cls"],
-                qtd=f["qtd"], resp=f["responsavel"], b=f["bucket"], b_cls=f["bucket_cls"]
-            )
-        )
-    return "\n".join(out)
-
-
-def bloco_status_aparelhos_chips():
-    if eh_quarta_hoje:
-        return """
-  <div style="background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:20px; color:var(--muted);">
-    📅 <strong>Hoje é quarta-feira</strong> — não há contagem de Aparelhos e Chips (só de Acessórios; confira a seção logo abaixo). O último dia com contagem continua disponível no Histórico.
-  </div>
-"""
-    return f"""
-  <div class="cards">
-    <div class="card"><div class="label">Filiais</div><div class="value">{inventario_resumo['total']}</div></div>
-    <div class="card ok"><div class="label">Completo</div><div class="value">{inventario_resumo['completo']}</div></div>
-    <div class="card warn"><div class="label">Com divergência</div><div class="value">{inventario_resumo['divergencia']}</div></div>
-    <div class="card warn"><div class="label">Pendente / Aguardando</div><div class="value">{inventario_resumo['pendente']}</div></div>
-    <div class="card bad"><div class="label">Não realizada</div><div class="value">{inventario_resumo['nao_realizada']}</div></div>
-  </div>
-  <div class="charts">
-    <div class="chart-box"><h4>Status geral das filiais <button class="chart-export-btn" data-chart-export="chart-inventario-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-inventario-status"></canvas></div></div>
-  </div>
-  <h3>📋 Status por filial</h3>
-  <div class="table-toolbar">
-    <input class="filtro" data-target="tbl-inventarios" placeholder="Filtrar por filial, área ou responsável...">
-    <button class="table-export-btn" data-export="tbl-inventarios">📥 Exportar Excel</button>
-  </div>
-  <div class="table-wrap">
-  <table id="tbl-inventarios" class="sortable">
-    <thead><tr><th>Filial</th><th>Área</th><th>Aparelhos</th><th>Chips</th><th>Responsável</th><th>Status Geral</th></tr></thead>
-    <tbody>
-    {linhas_inventario()}
-    </tbody>
-  </table>
-  </div>
-"""
 
 
 def secao_acessorios(id_, titulo, mtime, resumo, prefixo):
@@ -1000,8 +637,6 @@ html = rf"""<!DOCTYPE html>
   <a href="#acessorios" class="nav-link">🎧 Acessórios</a>
   <a href="#acessorios-tim" class="nav-link">📶 Fidelizados TIM</a>
   <a href="#devolvidos" class="nav-link">♻️ Devolvidos e Defeitos</a>
-  <a href="#inventarios" class="nav-link">📋 Inventários</a>
-  <a href="#inventarios-historico" class="nav-link">📆 Histórico de Contagem</a>
 </nav>
 <div class="content">
 <header>
@@ -1167,92 +802,6 @@ html = rf"""<!DOCTYPE html>
 {secao_acessorios("acessorios", "🎧 Acessórios nas Filiais", acessorios_mtime, acessorios_diversos_resumo, "acessorios")}
 {secao_seriais_tim(acessorios_mtime, seriais_resumo)}
 {secao_devolvidos(devolvidos_mtime, devolvidos_resumo)}
-
-<section id="inventarios">
-  <h2>📋 Inventários — Aparelhos e Chips (Diário)</h2>
-  <p class="secao-mtime">🕒 Planilha atualizada em {inventario_mtime} · Contagem referente a {data_contagem_str}</p>
-  {bloco_status_aparelhos_chips()}
-
-  <h2 style="margin-top:40px;">🧩 Inventário de Acessórios (Semanal — Quartas-feiras)</h2>
-  <p class="secao-mtime">🕒 Contagem referente a {data_contagem_acess_str} · atualiza só às quartas-feiras, nos outros dias mostra o último resultado</p>
-  <div class="cards">
-    <div class="card"><div class="label">Filiais</div><div class="value">{acessorios_inv_resumo['total']}</div></div>
-    <div class="card ok"><div class="label">Completo</div><div class="value">{acessorios_inv_resumo['completo']}</div></div>
-    <div class="card warn"><div class="label">Com divergência</div><div class="value">{acessorios_inv_resumo['divergencia']}</div></div>
-    <div class="card warn"><div class="label">Pendente</div><div class="value">{acessorios_inv_resumo['pendente']}</div></div>
-  </div>
-  <div class="charts">
-    <div class="chart-box"><h4>Status geral das filiais <button class="chart-export-btn" data-chart-export="chart-inventario-acessorios-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-inventario-acessorios-status"></canvas></div></div>
-  </div>
-  <h3>📋 Status por filial</h3>
-  <div class="table-toolbar">
-    <input class="filtro" data-target="tbl-inventarios-acessorios" placeholder="Filtrar por filial, área ou responsável...">
-    <button class="table-export-btn" data-export="tbl-inventarios-acessorios">📥 Exportar Excel</button>
-  </div>
-  <div class="table-wrap">
-  <table id="tbl-inventarios-acessorios" class="sortable">
-    <thead><tr><th>Filial</th><th>Área</th><th>Status</th><th>Quantidade</th><th>Responsável</th><th>Status Geral</th></tr></thead>
-    <tbody>
-    {linhas_inventario_acessorios()}
-    </tbody>
-  </table>
-  </div>
-</section>
-
-<section id="inventarios-historico">
-  <h2>📆 Histórico de Contagem por Filial</h2>
-  <p class="secao-mtime">🕒 Histórico construído automaticamente a cada publicação, desde {historico_primeiro_dia} · {historico_resumo['dias_registrados']} dia(s) registrado(s) até agora</p>
-  <p class="secao-mtime">ℹ️ As taxas de conclusão abaixo não contam o dia mais recente (pode ainda estar em andamento até às 17h) — refletem só os dias já fechados.</p>
-  <div class="cards">
-    <div class="card"><div class="label">Dias registrados</div><div class="value">{historico_resumo['dias_registrados']}</div></div>
-    <div class="card"><div class="label">Registros no histórico</div><div class="value">{historico_resumo['registros']}</div></div>
-    <div class="card ok"><div class="label">Taxa média de conclusão (aparelhos/chips)</div><div class="value">{historico_resumo['taxa_media']}%</div></div>
-    <div class="card"><div class="label">Quartas-feiras registradas</div><div class="value">{historico_acessorios_resumo['quartas_registradas']}</div></div>
-    <div class="card ok"><div class="label">Taxa média de conclusão (acessórios)</div><div class="value">{historico_acessorios_resumo['taxa_media']}%</div></div>
-  </div>
-  <div class="charts">
-    <div class="chart-box wide"><h4>Taxa de conclusão por filial — aparelhos/chips <button class="chart-export-btn" data-chart-export="chart-historico-taxa" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-historico-taxa"></canvas></div></div>
-    <div class="chart-box wide"><h4>Taxa de conclusão por filial — acessórios (só quartas-feiras) <button class="chart-export-btn" data-chart-export="chart-historico-acessorios-taxa" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-historico-acessorios-taxa"></canvas></div></div>
-  </div>
-  <h3>📋 Linha do tempo por filial — Aparelhos e Chips</h3>
-  <div class="filtros-pedidos">
-    <input class="filtro" id="filtro-historico" placeholder="Buscar por filial, data...">
-    <div class="msel" id="msel-historico-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
-    <div class="msel" id="msel-historico-bucket"><button type="button" class="msel-btn" data-default="Status geral (todos)">Status geral (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
-    <button id="limpar-historico" type="button">Limpar filtros</button>
-    <button class="table-export-btn" data-export="tbl-historico">📥 Exportar Excel</button>
-  </div>
-  <div class="table-wrap">
-  <table id="tbl-historico">
-    <thead><tr>
-      <th data-col="data">Data</th><th data-col="filial">Filial</th><th data-col="area">Área</th>
-      <th data-col="aparelhos">Aparelhos</th><th data-col="chips">Chips</th><th data-col="bucket">Status Geral</th>
-    </tr></thead>
-    <tbody id="tbody-historico"></tbody>
-  </table>
-  </div>
-  <div class="pager" id="pager-historico"></div>
-
-  <h3 style="margin-top:32px;">📋 Linha do tempo por filial — Acessórios (quartas-feiras)</h3>
-  <p class="secao-mtime">Desde {historico_acessorios_primeiro_dia} · {historico_acessorios_resumo['quartas_registradas']} quarta(s)-feira(s) registrada(s)</p>
-  <div class="filtros-pedidos">
-    <input class="filtro" id="filtro-historico-acessorios" placeholder="Buscar por filial, data...">
-    <div class="msel" id="msel-historico-acessorios-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
-    <div class="msel" id="msel-historico-acessorios-bucket"><button type="button" class="msel-btn" data-default="Status geral (todos)">Status geral (todos)</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
-    <button id="limpar-historico-acessorios" type="button">Limpar filtros</button>
-    <button class="table-export-btn" data-export="tbl-historico-acessorios">📥 Exportar Excel</button>
-  </div>
-  <div class="table-wrap">
-  <table id="tbl-historico-acessorios">
-    <thead><tr>
-      <th data-col="data">Data</th><th data-col="filial">Filial</th><th data-col="area">Área</th>
-      <th data-col="status">Status</th><th data-col="qtd">Quantidade</th><th data-col="bucket">Status Geral</th>
-    </tr></thead>
-    <tbody id="tbody-historico-acessorios"></tbody>
-  </table>
-  </div>
-  <div class="pager" id="pager-historico-acessorios"></div>
-</section>
 
 </main>
 <footer>Gerado automaticamente a partir das planilhas de controle · Rocha Telecom</footer>
@@ -1459,7 +1008,7 @@ document.addEventListener('click', function(e) {{
   }}
 }});
 
-['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-transf', 'tbl-inventarios', 'tbl-inventarios-acessorios'].forEach(registrarExportDOM);
+['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-transf'].forEach(registrarExportDOM);
 
 // ---- fabrica generica de tabela paginada com busca + multi-selecao, usada pelas tabelas de acessorios ----
 function criarTabelaPaginada(opts) {{
@@ -1941,82 +1490,6 @@ criarTabelaPaginada({{
   ]
 }});
 
-// ---- tabela de historico de inventarios ----
-function linhaHistoricoHtml(r) {{
-  return '<tr><td>' + r.data + '</td><td>' + r.filial + '</td><td>' + r.area + '</td>' +
-    '<td>' + r.aparelhos + '</td><td>' + r.chips + '</td>' +
-    '<td><span class="pill ' + r.bucket_cls + '">' + r.bucket + '</span></td></tr>';
-}}
-
-var HISTORICO_COLS = {{
-  data: function(r) {{ return r.data_ts; }},
-  filial: function(r) {{ return r.filial.toLowerCase(); }},
-  area: function(r) {{ return r.area.toLowerCase(); }},
-  aparelhos: function(r) {{ return r.aparelhos.toLowerCase(); }},
-  chips: function(r) {{ return r.chips.toLowerCase(); }},
-  bucket: function(r) {{ return r.bucket.toLowerCase(); }}
-}};
-
-function buscaHistorico(r) {{ return r.filial + ' ' + r.data + ' ' + r.area; }}
-
-criarTabelaPaginada({{
-  dados: {historico_json},
-  pageSize: 50, sortInicial: 'data',
-  tbodyId: 'tbody-historico', pagerId: 'pager-historico', tableId: 'tbl-historico',
-  buscaId: 'filtro-historico', limparId: 'limpar-historico',
-  colunas: HISTORICO_COLS, linhaHtml: linhaHistoricoHtml, busca: buscaHistorico,
-  filtros: [
-    {{ id: 'historico-filial', campo: 'filial' }},
-    {{ id: 'historico-bucket', campo: 'bucket' }}
-  ],
-  colunasExport: [
-    {{ label: 'Data', get: function(r) {{ return r.data; }} }},
-    {{ label: 'Filial', get: function(r) {{ return r.filial; }} }},
-    {{ label: 'Área', get: function(r) {{ return r.area; }} }},
-    {{ label: 'Aparelhos', get: function(r) {{ return r.aparelhos; }} }},
-    {{ label: 'Chips', get: function(r) {{ return r.chips; }} }},
-    {{ label: 'Status Geral', get: function(r) {{ return r.bucket; }} }}
-  ]
-}});
-
-// ---- historico de acessorios (separado, uma linha por quarta-feira registrada) ----
-function linhaHistoricoAcessoriosHtml(r) {{
-  return '<tr><td>' + r.data + '</td><td>' + r.filial + '</td><td>' + r.area + '</td>' +
-    '<td>' + r.status + '</td><td class="num">' + r.qtd + '</td>' +
-    '<td><span class="pill ' + r.bucket_cls + '">' + r.bucket + '</span></td></tr>';
-}}
-
-var HISTORICO_ACESSORIOS_COLS = {{
-  data: function(r) {{ return r.data_ts; }},
-  filial: function(r) {{ return r.filial.toLowerCase(); }},
-  area: function(r) {{ return r.area.toLowerCase(); }},
-  status: function(r) {{ return r.status.toLowerCase(); }},
-  qtd: function(r) {{ return typeof r.qtd === 'number' ? r.qtd : -Infinity; }},
-  bucket: function(r) {{ return r.bucket.toLowerCase(); }}
-}};
-
-function buscaHistoricoAcessorios(r) {{ return r.filial + ' ' + r.data + ' ' + r.area; }}
-
-criarTabelaPaginada({{
-  dados: {historico_acessorios_json},
-  pageSize: 50, sortInicial: 'data',
-  tbodyId: 'tbody-historico-acessorios', pagerId: 'pager-historico-acessorios', tableId: 'tbl-historico-acessorios',
-  buscaId: 'filtro-historico-acessorios', limparId: 'limpar-historico-acessorios',
-  colunas: HISTORICO_ACESSORIOS_COLS, linhaHtml: linhaHistoricoAcessoriosHtml, busca: buscaHistoricoAcessorios,
-  filtros: [
-    {{ id: 'historico-acessorios-filial', campo: 'filial' }},
-    {{ id: 'historico-acessorios-bucket', campo: 'bucket' }}
-  ],
-  colunasExport: [
-    {{ label: 'Data', get: function(r) {{ return r.data; }} }},
-    {{ label: 'Filial', get: function(r) {{ return r.filial; }} }},
-    {{ label: 'Área', get: function(r) {{ return r.area; }} }},
-    {{ label: 'Status', get: function(r) {{ return r.status; }} }},
-    {{ label: 'Quantidade', get: function(r) {{ return r.qtd; }} }},
-    {{ label: 'Status Geral', get: function(r) {{ return r.bucket; }} }}
-  ]
-}});
-
 const CHART_DATA = {chart_data_json};
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.borderColor = '#334155';
@@ -2132,60 +1605,6 @@ new Chart(document.getElementById('chart-devolvidos-filial'), {{
     scales: {{ x: {{ type: 'logarithmic', title: {{ display: true, text: 'Saldo (escala logarítmica — um chip com milhares de unidades em Estoque Matriz dominaria a escala linear)', color: '#94a3b8', font: {{ size: 10 }} }} }} }}
   }}
 }});
-
-var CORES_BUCKET_INVENTARIO = {{
-  'Completo': COR_OK, 'Com divergência': COR_WARN, 'Aguardando 2ª contagem': COR_WARN, 'Parcial': COR_WARN,
-  'Não realizada': COR_BAD, 'Não iniciado': '#64748b'
-}};
-if (document.getElementById('chart-inventario-status')) {{
-  new Chart(document.getElementById('chart-inventario-status'), {{
-    type: 'doughnut',
-    data: {{
-      labels: CHART_DATA.inventarioBuckets.labels,
-      datasets: [{{
-        data: CHART_DATA.inventarioBuckets.values,
-        backgroundColor: CHART_DATA.inventarioBuckets.labels.map(function(l) {{ return CORES_BUCKET_INVENTARIO[l] || COR_ACCENT; }})
-      }}]
-    }},
-    options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
-  }});
-}}
-
-new Chart(document.getElementById('chart-historico-taxa'), {{
-  type: 'bar',
-  data: {{
-    labels: CHART_DATA.historicoTaxas.labels,
-    datasets: [{{ label: 'Taxa de conclusão (%)', data: CHART_DATA.historicoTaxas.taxa, backgroundColor: COR_OK }}]
-  }},
-  options: {{
-    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-    plugins: {{ legend: {{ display: false }} }}, scales: {{ x: {{ max: 100 }} }}
-  }}
-}});
-
-new Chart(document.getElementById('chart-inventario-acessorios-status'), {{
-  type: 'doughnut',
-  data: {{
-    labels: CHART_DATA.acessoriosInvBuckets.labels,
-    datasets: [{{
-      data: CHART_DATA.acessoriosInvBuckets.values,
-      backgroundColor: CHART_DATA.acessoriosInvBuckets.labels.map(function(l) {{ return CORES_BUCKET_INVENTARIO[l] || COR_ACCENT; }})
-    }}]
-  }},
-  options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
-}});
-
-new Chart(document.getElementById('chart-historico-acessorios-taxa'), {{
-  type: 'bar',
-  data: {{
-    labels: CHART_DATA.historicoAcessoriosTaxas.labels,
-    datasets: [{{ label: 'Taxa de conclusão (%)', data: CHART_DATA.historicoAcessoriosTaxas.taxa, backgroundColor: COR_ACCENT }}]
-  }},
-  options: {{
-    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-    plugins: {{ legend: {{ display: false }} }}, scales: {{ x: {{ max: 100 }} }}
-  }}
-}});
 </script>
 </body>
 </html>
@@ -2195,8 +1614,6 @@ OUT.write_text(html, encoding="utf-8")
 print(
     f"OK: {OUT} gerado com {len(notas_atrasadas)} notas atrasadas, {len(transf_todas)} transferências pendentes "
     f"({len(transf_criticas)} críticas), {len(acessorios_diversos_itens)} itens de acessórios, "
-    f"{len(seriais_itens)} peças com serial de acessórios fidelizados TIM, "
-    f"{len(devolvidos_itens)} itens devolvidos/com defeito, inventário de {inventario_resumo['total']} filiais "
-    f"({historico_resumo['dias_registrados']} dia(s) no histórico) e inventário de acessórios de "
-    f"{acessorios_inv_resumo['total']} filiais ({historico_acessorios_resumo['quartas_registradas']} quarta(s) no histórico)."
+    f"{len(seriais_itens)} peças com serial de acessórios fidelizados TIM e "
+    f"{len(devolvidos_itens)} itens devolvidos/com defeito."
 )
