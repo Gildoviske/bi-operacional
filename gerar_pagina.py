@@ -39,6 +39,15 @@ def load_dicts(arquivo, aba):
     return [dict(zip(header, r)) for r in linhas[1:]]
 
 
+def load_dicts_skip(arquivo, aba, marcador_cabecalho):
+    """Como load_dicts, mas pula linhas de título até achar a linha cujo 1º valor bate com
+    marcador_cabecalho — usa essa como cabeçalho. Para abas que têm um título antes da tabela."""
+    linhas = load(arquivo, aba)
+    idx = next(i for i, r in enumerate(linhas) if r and r[0] == marcador_cabecalho)
+    header = [(h or f"_col{i}").strip() if isinstance(h, str) else (h or f"_col{i}") for i, h in enumerate(linhas[idx])]
+    return [dict(zip(header, r)) for r in linhas[idx + 1:]]
+
+
 def mtime_str(arquivo):
     ts = (BASE / arquivo).stat().st_mtime
     return datetime.fromtimestamp(ts).strftime("%d/%m/%Y às %H:%M")
@@ -286,6 +295,78 @@ devolvidos_resumo = {
 }
 devolvidos_json = json.dumps(devolvidos_itens, ensure_ascii=False)
 
+# ---------------------------------------------------------------- MALOTES
+malotes_mtime = mtime_str("CONTROLE MALOTES.xlsm")
+
+MALOTE_STATUS_ADM_CLASSE = {"CRÍTICO": "bad", "BAIXO": "warn", "NORMAL": "ok", "EXCEDENTE": "ok"}
+
+malotes_capacidade = {r.get("FILIAIS"): r.get("QTD MALOTE") for r in load_dicts("CONTROLE MALOTES.xlsm", "TB_CAPACIDADE")}
+
+malotes_filiais = []
+for r in load_dicts("CONTROLE MALOTES.xlsm", "BASE_DADOS"):
+    filial = r.get("FILIAIS")
+    if not filial:
+        continue
+    status_adm = r.get("STATUS ADM") or "-"
+    malotes_filiais.append({
+        "filial": filial, "na_filial": r.get("MALOTES NA FILIAL") or 0,
+        "no_adm": r.get("MALOTES NO ADM") or 0, "capacidade": malotes_capacidade.get(filial, "-"),
+        "status_adm": status_adm, "status_cls": MALOTE_STATUS_ADM_CLASSE.get(status_adm, ""),
+        "acao": r.get("AÇÃO") or "-",
+    })
+malotes_filiais.sort(key=lambda f: f["no_adm"])
+
+malotes_resumo = {
+    "total_parque": sum(f["na_filial"] + f["no_adm"] for f in malotes_filiais),
+    "no_adm": sum(f["no_adm"] for f in malotes_filiais),
+    "nas_filiais": sum(f["na_filial"] for f in malotes_filiais),
+    "filiais": len(malotes_filiais),
+    "sem_malote_adm": sum(1 for f in malotes_filiais if f["no_adm"] == 0),
+}
+
+malotes_status_adm_buckets = {}
+for f in malotes_filiais:
+    malotes_status_adm_buckets[f["status_adm"]] = malotes_status_adm_buckets.get(f["status_adm"], 0) + 1
+MALOTE_ORDEM_STATUS_ADM = ["CRÍTICO", "BAIXO", "NORMAL", "EXCEDENTE"]
+
+MALOTE_STATUS_LOG_CLASSE = {"POSTADO": "ok", "PENDENTE": "warn", "CANCELADO": "bad"}
+
+
+def malote_epoch(dt):
+    return int(dt.timestamp() * 1000) if hasattr(dt, "timestamp") else 0
+
+
+malotes_log_itens = []
+for r in load_dicts_skip("CONTROLE MALOTES.xlsm", "GERAL", "ID"):
+    if r.get("ID") is None:
+        continue
+    status = r.get("STATUS") or "-"
+    dt_sol = r.get("DATA SOLICITAÇÃO")
+    dt_post = r.get("DATA POSTAGEM")
+    horas = None
+    if hasattr(dt_sol, "timestamp") and hasattr(dt_post, "timestamp"):
+        horas = round((dt_post - dt_sol).total_seconds() / 3600, 1)
+    malotes_log_itens.append({
+        "id": r.get("ID"), "solicitante": r.get("SOLICITANTE") or "-",
+        "filial": r.get("FILIAL DESTINO") or "-", "qtd": r.get("QUANTIDADE") or 0,
+        "conteudo": r.get("CONTEÚDO") or "-",
+        "data_sol": data_str(dt_sol), "data_sol_ts": malote_epoch(dt_sol),
+        "status": status, "status_cls": MALOTE_STATUS_LOG_CLASSE.get(status, ""),
+        "data_post": data_str(dt_post), "quem_postou": r.get("QUEM POSTOU?") or "-",
+        "baixado_adm": r.get("BAIXADO ADM") or "-", "obs": r.get("OBSERVAÇÃO") or "-",
+        "horas_postagem": horas if horas is not None else "-",
+    })
+malotes_log_itens.sort(key=lambda x: x["data_sol_ts"], reverse=True)
+
+horas_validas = [x["horas_postagem"] for x in malotes_log_itens if x["horas_postagem"] != "-"]
+malotes_log_resumo = {
+    "total": len(malotes_log_itens),
+    "pendentes": sum(1 for x in malotes_log_itens if x["status"] == "PENDENTE"),
+    "postados": sum(1 for x in malotes_log_itens if x["status"] == "POSTADO"),
+    "tempo_medio_h": round(sum(horas_validas) / len(horas_validas), 1) if horas_validas else 0,
+}
+malotes_log_json = json.dumps(malotes_log_itens, ensure_ascii=False)
+
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
 chart_data = {
@@ -335,6 +416,15 @@ chart_data = {
     "devolvidos": {
         "labels": [f[0] for f in devolvidos_filiais_ordenadas],
         "saldo": [f[1] for f in devolvidos_filiais_ordenadas],
+    },
+    "malotesStatusAdm": {
+        "labels": [b for b in MALOTE_ORDEM_STATUS_ADM if malotes_status_adm_buckets.get(b)],
+        "values": [malotes_status_adm_buckets.get(b, 0) for b in MALOTE_ORDEM_STATUS_ADM if malotes_status_adm_buckets.get(b)],
+    },
+    "malotesFilial": {
+        "labels": [f["filial"] for f in malotes_filiais],
+        "na_filial": [f["na_filial"] for f in malotes_filiais],
+        "no_adm": [f["no_adm"] for f in malotes_filiais],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -531,6 +621,74 @@ def secao_devolvidos(mtime, resumo):
 """
 
 
+def linhas_malotes():
+    out = []
+    for f in malotes_filiais:
+        out.append(
+            "<tr><td>{fil}</td><td class='num'>{na_filial}</td><td class='num'>{no_adm}</td>"
+            "<td class='num'>{cap}</td><td><span class='pill {s_cls}'>{s}</span></td><td>{acao}</td></tr>".format(
+                fil=f["filial"], na_filial=f["na_filial"], no_adm=f["no_adm"], cap=f["capacidade"],
+                s=f["status_adm"], s_cls=f["status_cls"], acao=f["acao"]
+            )
+        )
+    return "\n".join(out)
+
+
+def secao_malotes(mtime, resumo_filiais, resumo_log):
+    return f"""
+<section id="malotes">
+  <h2>📮 Controle de Malotes</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {mtime}</p>
+  <div class="cards">
+    <div class="card"><div class="label">Total de Malotes (Parque)</div><div class="value">{resumo_filiais['total_parque']}</div></div>
+    <div class="card ok"><div class="label">No ADM</div><div class="value">{resumo_filiais['no_adm']}</div></div>
+    <div class="card ok"><div class="label">Nas Filiais</div><div class="value">{resumo_filiais['nas_filiais']}</div></div>
+    <div class="card bad"><div class="label">Filiais sem Malote no ADM</div><div class="value">{resumo_filiais['sem_malote_adm']}</div></div>
+    <div class="card warn"><div class="label">Solicitações Pendentes</div><div class="value">{resumo_log['pendentes']}</div></div>
+    <div class="card"><div class="label">Tempo Médio até Postagem</div><div class="value">{resumo_log['tempo_medio_h']}h</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box"><h4>Status ADM por filial <button class="chart-export-btn" data-chart-export="chart-malotes-status-adm" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-malotes-status-adm"></canvas></div></div>
+    <div class="chart-box wide"><h4>Malotes por filial (na filial x no ADM) <button class="chart-export-btn" data-chart-export="chart-malotes-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-malotes-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Malotes por filial</h3>
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-malotes-filial" placeholder="Filtrar por filial ou ação...">
+    <button class="table-export-btn" data-export="tbl-malotes-filial">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-malotes-filial" class="sortable">
+    <thead><tr><th>Filial</th><th>Malotes na Filial</th><th>Malotes no ADM</th><th>Capacidade</th><th>Status ADM</th><th>Ação</th></tr></thead>
+    <tbody>
+    {linhas_malotes()}
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="margin-top:32px;">📋 Solicitações de postagem</h3>
+  <div class="filtros-pedidos">
+    <input class="filtro" id="filtro-malotes-log" placeholder="Buscar por filial, solicitante, ID...">
+    <div class="msel" id="msel-malotes-log-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-malotes-log-status"><button type="button" class="msel-btn" data-default="Todos os status">Todos os status</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-malotes-log-conteudo"><button type="button" class="msel-btn" data-default="Todo conteúdo">Todo conteúdo</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <button id="limpar-malotes-log" type="button">Limpar filtros</button>
+    <button class="table-export-btn" data-export="tbl-malotes-log">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-malotes-log">
+    <thead><tr>
+      <th data-col="id">ID</th><th data-col="solicitante">Solicitante</th><th data-col="filial">Filial Destino</th>
+      <th data-col="qtd">Qtde</th><th data-col="conteudo">Conteúdo</th><th data-col="data_sol">Data Solicitação</th>
+      <th data-col="status">Status</th><th data-col="data_post">Data Postagem</th><th data-col="quem_postou">Quem Postou</th>
+    </tr></thead>
+    <tbody id="tbody-malotes-log"></tbody>
+  </table>
+  </div>
+  <div class="pager" id="pager-malotes-log"></div>
+</section>
+"""
+
+
 html = rf"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -639,6 +797,7 @@ html = rf"""<!DOCTYPE html>
   <a href="#acessorios" class="nav-link">🎧 Acessórios</a>
   <a href="#acessorios-tim" class="nav-link">📶 Fidelizados TIM</a>
   <a href="#devolvidos" class="nav-link">♻️ Devolvidos e Defeitos</a>
+  <a href="#malotes" class="nav-link">📮 Controle de Malotes</a>
 </nav>
 <div class="content">
 <header>
@@ -804,6 +963,7 @@ html = rf"""<!DOCTYPE html>
 {secao_acessorios("acessorios", "🎧 Acessórios nas Filiais", acessorios_mtime, acessorios_diversos_resumo, "acessorios")}
 {secao_seriais_tim(acessorios_mtime, seriais_resumo)}
 {secao_devolvidos(devolvidos_mtime, devolvidos_resumo)}
+{secao_malotes(malotes_mtime, malotes_resumo, malotes_log_resumo)}
 
 </main>
 <footer>Gerado automaticamente a partir das planilhas de controle · Rocha Telecom</footer>
@@ -1010,7 +1170,7 @@ document.addEventListener('click', function(e) {{
   }}
 }});
 
-['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-transf'].forEach(registrarExportDOM);
+['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-transf', 'tbl-malotes-filial'].forEach(registrarExportDOM);
 
 // ---- fabrica generica de tabela paginada com busca + multi-selecao, usada pelas tabelas de acessorios ----
 function criarTabelaPaginada(opts) {{
@@ -1492,6 +1652,55 @@ criarTabelaPaginada({{
   ]
 }});
 
+// ---- tabela de solicitacoes de postagem de malotes ----
+function linhaMaloteLogHtml(r) {{
+  return '<tr><td class="num">' + r.id + '</td><td>' + r.solicitante + '</td><td>' + r.filial + '</td>' +
+    '<td class="num">' + r.qtd + '</td><td>' + r.conteudo + '</td><td>' + r.data_sol + '</td>' +
+    '<td><span class="pill ' + r.status_cls + '">' + r.status + '</span></td>' +
+    '<td>' + r.data_post + '</td><td>' + r.quem_postou + '</td></tr>';
+}}
+
+var MALOTES_LOG_COLS = {{
+  id: function(r) {{ return r.id; }},
+  solicitante: function(r) {{ return r.solicitante.toLowerCase(); }},
+  filial: function(r) {{ return r.filial.toLowerCase(); }},
+  qtd: function(r) {{ return r.qtd; }},
+  conteudo: function(r) {{ return r.conteudo.toLowerCase(); }},
+  data_sol: function(r) {{ return r.data_sol_ts; }},
+  status: function(r) {{ return r.status.toLowerCase(); }},
+  data_post: function(r) {{ return r.data_post; }},
+  quem_postou: function(r) {{ return r.quem_postou.toLowerCase(); }}
+}};
+
+function buscaMaloteLog(r) {{ return r.id + ' ' + r.solicitante + ' ' + r.filial + ' ' + r.conteudo; }}
+
+criarTabelaPaginada({{
+  dados: {malotes_log_json},
+  pageSize: 50, sortInicial: 'data_sol',
+  tbodyId: 'tbody-malotes-log', pagerId: 'pager-malotes-log', tableId: 'tbl-malotes-log',
+  buscaId: 'filtro-malotes-log', limparId: 'limpar-malotes-log',
+  colunas: MALOTES_LOG_COLS, linhaHtml: linhaMaloteLogHtml, busca: buscaMaloteLog,
+  filtros: [
+    {{ id: 'malotes-log-filial', campo: 'filial' }},
+    {{ id: 'malotes-log-status', campo: 'status' }},
+    {{ id: 'malotes-log-conteudo', campo: 'conteudo' }}
+  ],
+  colunasExport: [
+    {{ label: 'ID', get: function(r) {{ return r.id; }} }},
+    {{ label: 'Solicitante', get: function(r) {{ return r.solicitante; }} }},
+    {{ label: 'Filial Destino', get: function(r) {{ return r.filial; }} }},
+    {{ label: 'Quantidade', get: function(r) {{ return r.qtd; }} }},
+    {{ label: 'Conteúdo', get: function(r) {{ return r.conteudo; }} }},
+    {{ label: 'Data Solicitação', get: function(r) {{ return r.data_sol; }} }},
+    {{ label: 'Status', get: function(r) {{ return r.status; }} }},
+    {{ label: 'Data Postagem', get: function(r) {{ return r.data_post; }} }},
+    {{ label: 'Quem Postou', get: function(r) {{ return r.quem_postou; }} }},
+    {{ label: 'Baixado ADM', get: function(r) {{ return r.baixado_adm; }} }},
+    {{ label: 'Observação', get: function(r) {{ return r.obs; }} }},
+    {{ label: 'Horas até Postagem', get: function(r) {{ return r.horas_postagem; }} }}
+  ]
+}});
+
 const CHART_DATA = {chart_data_json};
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.borderColor = '#334155';
@@ -1607,6 +1816,31 @@ new Chart(document.getElementById('chart-devolvidos-filial'), {{
     scales: {{ x: {{ type: 'logarithmic', title: {{ display: true, text: 'Saldo (escala logarítmica — um chip com milhares de unidades em Estoque Matriz dominaria a escala linear)', color: '#94a3b8', font: {{ size: 10 }} }} }} }}
   }}
 }});
+
+var CORES_STATUS_ADM_MALOTES = {{ 'CRÍTICO': COR_BAD, 'BAIXO': COR_WARN, 'NORMAL': COR_OK, 'EXCEDENTE': COR_ACCENT }};
+new Chart(document.getElementById('chart-malotes-status-adm'), {{
+  type: 'doughnut',
+  data: {{
+    labels: CHART_DATA.malotesStatusAdm.labels,
+    datasets: [{{
+      data: CHART_DATA.malotesStatusAdm.values,
+      backgroundColor: CHART_DATA.malotesStatusAdm.labels.map(function(l) {{ return CORES_STATUS_ADM_MALOTES[l] || COR_ACCENT; }})
+    }}]
+  }},
+  options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
+}});
+
+new Chart(document.getElementById('chart-malotes-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.malotesFilial.labels,
+    datasets: [
+      {{ label: 'Na Filial', data: CHART_DATA.malotesFilial.na_filial, backgroundColor: COR_ACCENT }},
+      {{ label: 'No ADM', data: CHART_DATA.malotesFilial.no_adm, backgroundColor: COR_OK }}
+    ]
+  }},
+  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }}, plugins: {{ legend: {{ position: 'bottom' }} }} }}
+}});
 </script>
 </body>
 </html>
@@ -1616,6 +1850,7 @@ OUT.write_text(html, encoding="utf-8")
 print(
     f"OK: {OUT} gerado com {len(notas_atrasadas)} notas atrasadas, {len(transf_todas)} transferências pendentes "
     f"({len(transf_criticas)} críticas), {len(acessorios_diversos_itens)} itens de acessórios, "
-    f"{len(seriais_itens)} peças com serial de acessórios fidelizados TIM e "
-    f"{len(devolvidos_itens)} itens devolvidos/com defeito."
+    f"{len(seriais_itens)} peças com serial de acessórios fidelizados TIM, "
+    f"{len(devolvidos_itens)} itens devolvidos/com defeito e {malotes_log_resumo['total']} solicitações de malotes "
+    f"({malotes_log_resumo['pendentes']} pendentes)."
 )
