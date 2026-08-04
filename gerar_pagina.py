@@ -55,7 +55,9 @@ def brl(v):
 def data_str(v):
     if v is None:
         return ""
-    return v.strftime("%d/%m/%Y")
+    if hasattr(v, "strftime"):
+        return v.strftime("%d/%m/%Y")
+    return str(v)
 
 
 # ---------------------------------------------------------------- PEDIDOS
