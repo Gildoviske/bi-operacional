@@ -56,7 +56,7 @@
   table.sortable th { cursor: pointer; user-select: none; }
   table.sortable th:hover { color: var(--text); }
   table.sortable th .sort-ind { color: var(--accent); }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.num, th.num { text-align: center; font-variant-numeric: tabular-nums; }
   .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
   .pill.ok { background: rgba(34,197,94,.15); color: var(--ok); }
   .pill.warn { background: rgba(245,158,11,.15); color: var(--warn); }
@@ -121,7 +121,7 @@
   </div>
   <div class="badge-atualizacao">
     <div class="data">🕒 Atualizado em 04/08/2026</div>
-    <div class="gerado">Página gerada em 05/08/2026 13:06</div>
+    <div class="gerado">Página gerada em 05/08/2026 13:14</div>
   </div>
 </header>
 <main>
@@ -149,7 +149,7 @@
   </div>
   <div class="table-wrap">
   <table id="tbl-pedidos-filial" class="sortable">
-    <thead><tr><th>Filial</th><th>Total</th><th>Entregue</th><th>Pendente</th><th>Atrasado</th><th>% Entregue</th></tr></thead>
+    <thead><tr><th>Filial</th><th class="num">Total</th><th class="num">Entregue</th><th class="num">Pendente</th><th class="num">Atrasado</th><th class="num">% Entregue</th></tr></thead>
     <tbody>
     <tr><td>BAURU CALÇADÃO</td><td class='num'>117</td><td class='num'>68</td><td class='num'>49</td><td class='num'>0</td><td class='num'>58,1%</td></tr>
 <tr><td>JAÚ SHOPPING</td><td class='num'>92</td><td class='num'>71</td><td class='num'>21</td><td class='num'>0</td><td class='num'>77,2%</td></tr>
@@ -195,8 +195,8 @@
   <table id="tbl-pedidos-detalhe">
     <thead><tr>
       <th data-col="dreal">Data Realização</th><th data-col="dproc">Data Processamento</th><th data-col="dprev">Data Prevista Entrega</th>
-      <th data-col="fil">Filial Destino</th><th data-col="ped">Nº Pedido GN</th><th data-col="qtd">Qtde</th><th data-col="desc">Descrição do Produto</th>
-      <th data-col="stprod">Status do Produto</th><th data-col="dias">Dias em Aberto</th><th data-col="entrada">Entrada no Sistema</th><th data-col="status">Status</th>
+      <th data-col="fil">Filial Destino</th><th data-col="ped" class="num">Nº Pedido GN</th><th data-col="qtd" class="num">Qtde</th><th data-col="desc">Descrição do Produto</th>
+      <th data-col="stprod">Status do Produto</th><th data-col="dias" class="num">Dias em Aberto</th><th data-col="entrada">Entrada no Sistema</th><th data-col="status">Status</th>
     </tr></thead>
     <tbody id="tbody-pedidos-detalhe"></tbody>
   </table>
@@ -226,7 +226,7 @@
   </div>
   <div class="table-wrap">
   <table id="tbl-notas" class="sortable">
-    <thead><tr><th>Filial</th><th>Nota Fiscal</th><th>Descrição</th><th>Qtde</th><th>Dia da Entrega</th><th>Dias em Atraso</th></tr></thead>
+    <thead><tr><th>Filial</th><th>Nota Fiscal</th><th>Descrição</th><th class="num">Qtde</th><th>Dia da Entrega</th><th class="num">Dias em Atraso</th></tr></thead>
     <tbody>
     <tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>APPLE IPHONE 15 256GB-PRETO NAC</td><td class='num'>4</td><td>26/06/2026</td><td class='num'>40</td></tr>
 <tr><td>BAURU CALÇADÃO</td><td>2648871</td><td>APPLE IPHONE 15 256GB-AZUL NAC</td><td class='num'>2</td><td>26/06/2026</td><td class='num'>40</td></tr>
@@ -305,9 +305,9 @@
   <div class="table-wrap">
   <table id="tbl-transf">
     <thead><tr>
-      <th data-col="orig">Filial Origem</th><th data-col="dias">Dias fora do estoque</th><th data-col="dest">Filial Destino</th>
+      <th data-col="orig">Filial Origem</th><th data-col="dias" class="num">Dias fora do estoque</th><th data-col="dest">Filial Destino</th>
       <th data-col="user">Usuário Solicitante</th><th data-col="nf">NF</th><th data-col="prod">Produto</th>
-      <th data-col="desc">Descrição</th><th data-col="qtd">Qtde</th><th data-col="crit">Criticidade</th>
+      <th data-col="desc">Descrição</th><th data-col="qtd" class="num">Qtde</th><th data-col="crit">Criticidade</th>
     </tr></thead>
     <tbody id="tbody-transf"></tbody>
   </table>
@@ -334,7 +334,7 @@
   </div>
   <div class="table-wrap">
   <table id="tbl-amet" class="sortable">
-    <thead><tr><th>Filial</th><th class='num'>Fosca Matte</th><th class='num'>Privacidade</th><th class='num'>Traseira Skin Diversos</th><th class='num'>Transparente</th><th class='num'>Ultra Uv Hd</th><th>Total Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
+    <thead><tr><th>Filial</th><th class='num'>Fosca Matte</th><th class='num'>Privacidade</th><th class='num'>Traseira Skin Diversos</th><th class='num'>Transparente</th><th class='num'>Ultra Uv Hd</th><th class="num">Total Estoque</th><th class="num">Vendido (período)</th><th class="num">Giro (vendido/estoque)</th></tr></thead>
     <tbody>
     <tr><td>PIRACICABA CENTRO</td><td class='num'>31</td><td class='num'>0</td><td class='num'>16</td><td class='num'>2</td><td class='num'>0</td><td class='num'>49</td><td class='num'>73</td><td class='num'>149,0%</td></tr>
 <tr><td>SANTA BARBARA TIVOLI</td><td class='num'>15</td><td class='num'>6</td><td class='num'>13</td><td class='num'>7</td><td class='num'>0</td><td class='num'>41</td><td class='num'>44</td><td class='num'>107,3%</td></tr>
@@ -385,7 +385,7 @@
   </div>
   <div class="table-wrap">
   <table id="tbl-devia" class="sortable">
-    <thead><tr><th>Filial</th><th class='num'>Fosca Matte</th><th class='num'>Privacidade</th><th class='num'>Transparente</th><th>Total Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
+    <thead><tr><th>Filial</th><th class='num'>Fosca Matte</th><th class='num'>Privacidade</th><th class='num'>Transparente</th><th class="num">Total Estoque</th><th class="num">Vendido (período)</th><th class="num">Giro (vendido/estoque)</th></tr></thead>
     <tbody>
     <tr><td>JAU SHOPPING</td><td class='num'>33</td><td class='num'>11</td><td class='num'>35</td><td class='num'>79</td><td class='num'>42</td><td class='num'>53,2%</td></tr>
 <tr><td>AMERICANA CENTRO</td><td class='num'>46</td><td class='num'>20</td><td class='num'>40</td><td class='num'>106</td><td class='num'>15</td><td class='num'>14,2%</td></tr>
@@ -447,7 +447,7 @@
   </div>
   <div class="table-wrap">
   <table id="tbl-upmaster" class="sortable">
-    <thead><tr><th>Filial</th><th class='num'>Fosca Matte</th><th class='num'>Privacidade</th><th class='num'>Transparente</th><th>Total Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
+    <thead><tr><th>Filial</th><th class='num'>Fosca Matte</th><th class='num'>Privacidade</th><th class='num'>Transparente</th><th class="num">Total Estoque</th><th class="num">Vendido (período)</th><th class="num">Giro (vendido/estoque)</th></tr></thead>
     <tbody>
     <tr><td>BAURU SHOPPING</td><td class='num'>0</td><td class='num'>2</td><td class='num'>62</td><td class='num'>64</td><td class='num'>48</td><td class='num'>75,0%</td></tr>
 <tr><td>SJC CENTRO</td><td class='num'>47</td><td class='num'>19</td><td class='num'>67</td><td class='num'>133</td><td class='num'>24</td><td class='num'>18,0%</td></tr>
@@ -512,7 +512,7 @@
   </div>
   <div class="table-wrap">
   <table id="tbl-manutencoes" class="sortable">
-    <thead><tr><th>Nº Chamado</th><th>Filial</th><th>Manutenção Solicitada</th><th>Status</th><th>Dias sem Conclusão</th><th>Observação</th></tr></thead>
+    <thead><tr><th>Nº Chamado</th><th>Filial</th><th>Manutenção Solicitada</th><th>Status</th><th class="num">Dias sem Conclusão</th><th>Observação</th></tr></thead>
     <tbody>
     <tr><td>1487054</td><td>JACAREÍ</td><td>VASO ENTUPIDO</td><td><span class='pill warn'>PENDENTE</span></td><td class='num'>27</td><td>NECESSÁRIO ENVIO DE 3 ORÇAMENTOS</td></tr>
 <tr><td>1487054</td><td>JACAREÍ</td><td>LIMPEZA DO BEBEDOURO</td><td><span class='pill warn'>PENDENTE</span></td><td class='num'>27</td><td>BEBEDOURO É DE MESA, NÃO É POSSÍVEL FAZER LIMPEZA</td></tr>
@@ -550,8 +550,8 @@
   <table id="tbl-acessorios">
     <thead><tr>
       <th data-col="filial">Filial</th><th data-col="ref">Referência</th><th data-col="desc">Descrição</th><th data-col="subgrupo">Tipo</th>
-      <th data-col="fabricante">Fabricante</th><th data-col="saldo">Saldo</th><th data-col="disponivel">Disponível</th>
-      <th data-col="valor">Valor Unit.</th><th data-col="valor_total">Valor Total</th>
+      <th data-col="fabricante">Fabricante</th><th data-col="saldo" class="num">Saldo</th><th data-col="disponivel" class="num">Disponível</th>
+      <th data-col="valor" class="num">Valor Unit.</th><th data-col="valor_total" class="num">Valor Total</th>
     </tr></thead>
     <tbody id="tbody-acessorios"></tbody>
   </table>
@@ -586,7 +586,7 @@
     <thead><tr>
       <th data-col="filial">Filial</th><th data-col="serial">Serial</th><th data-col="desc">Descrição</th>
       <th data-col="fabricante">Fabricante</th><th data-col="data_compra">Data Compra</th>
-      <th data-col="dias">Dias em Estoque</th><th data-col="valor">Valor</th>
+      <th data-col="dias" class="num">Dias em Estoque</th><th data-col="valor" class="num">Valor</th>
     </tr></thead>
     <tbody id="tbody-acessorios-tim"></tbody>
   </table>
@@ -620,8 +620,8 @@
   <table id="tbl-devolvidos">
     <thead><tr>
       <th data-col="filial">Filial</th><th data-col="desc">Descrição</th><th data-col="grupo">Categoria</th>
-      <th data-col="fabricante">Fabricante</th><th data-col="saldo">Saldo</th><th data-col="custo">Custo Unit.</th>
-      <th data-col="custo_total">Custo Total</th><th data-col="data_mov">Última Movimentação</th>
+      <th data-col="fabricante">Fabricante</th><th data-col="saldo" class="num">Saldo</th><th data-col="custo" class="num">Custo Unit.</th>
+      <th data-col="custo_total" class="num">Custo Total</th><th data-col="data_mov">Última Movimentação</th>
     </tr></thead>
     <tbody id="tbody-devolvidos"></tbody>
   </table>
@@ -652,7 +652,7 @@
   </div>
   <div class="table-wrap">
   <table id="tbl-malotes-filial" class="sortable">
-    <thead><tr><th>Filial</th><th>Malotes na Filial</th><th>Malotes no ADM</th><th>Capacidade</th><th>Status ADM</th><th>Ação</th></tr></thead>
+    <thead><tr><th>Filial</th><th class="num">Malotes na Filial</th><th class="num">Malotes no ADM</th><th class="num">Capacidade</th><th>Status ADM</th><th>Ação</th></tr></thead>
     <tbody>
     <tr><td>CAMPINAS 13 DE MAIO</td><td class='num'>4</td><td class='num'>0</td><td class='num'>4</td><td><span class='pill bad'>CRÍTICO</span></td><td>SOLICITAR COLETA</td></tr>
 <tr><td>ARARAS CENTRO</td><td class='num'>3</td><td class='num'>1</td><td class='num'>4</td><td><span class='pill warn'>BAIXO</span></td><td>ACOMPANHAR</td></tr>
@@ -702,8 +702,8 @@
   <div class="table-wrap">
   <table id="tbl-malotes-log">
     <thead><tr>
-      <th data-col="id">ID</th><th data-col="solicitante">Solicitante</th><th data-col="filial">Filial Destino</th>
-      <th data-col="qtd">Qtde</th><th data-col="conteudo">Conteúdo</th><th data-col="data_sol">Data Solicitação</th>
+      <th data-col="id" class="num">ID</th><th data-col="solicitante">Solicitante</th><th data-col="filial">Filial Destino</th>
+      <th data-col="qtd" class="num">Qtde</th><th data-col="conteudo">Conteúdo</th><th data-col="data_sol">Data Solicitação</th>
       <th data-col="status">Status</th><th data-col="data_post">Data Postagem</th><th data-col="quem_postou">Quem Postou</th>
     </tr></thead>
     <tbody id="tbody-malotes-log"></tbody>

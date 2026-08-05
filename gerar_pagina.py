@@ -645,7 +645,7 @@ def secao_pelicula(id_, titulo, dados, prefixo):
   </div>
   <div class="table-wrap">
   <table id="tbl-{prefixo}" class="sortable">
-    <thead><tr><th>Filial</th>{colunas_produtos}<th>Total Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
+    <thead><tr><th>Filial</th>{colunas_produtos}<th class="num">Total Estoque</th><th class="num">Vendido (período)</th><th class="num">Giro (vendido/estoque)</th></tr></thead>
     <tbody>
     {linhas_html}
     </tbody>
@@ -682,8 +682,8 @@ def secao_acessorios(id_, titulo, mtime, resumo, prefixo):
   <table id="tbl-{prefixo}">
     <thead><tr>
       <th data-col="filial">Filial</th><th data-col="ref">Referência</th><th data-col="desc">Descrição</th><th data-col="subgrupo">Tipo</th>
-      <th data-col="fabricante">Fabricante</th><th data-col="saldo">Saldo</th><th data-col="disponivel">Disponível</th>
-      <th data-col="valor">Valor Unit.</th><th data-col="valor_total">Valor Total</th>
+      <th data-col="fabricante">Fabricante</th><th data-col="saldo" class="num">Saldo</th><th data-col="disponivel" class="num">Disponível</th>
+      <th data-col="valor" class="num">Valor Unit.</th><th data-col="valor_total" class="num">Valor Total</th>
     </tr></thead>
     <tbody id="tbody-{prefixo}"></tbody>
   </table>
@@ -721,7 +721,7 @@ def secao_seriais_tim(mtime, resumo):
     <thead><tr>
       <th data-col="filial">Filial</th><th data-col="serial">Serial</th><th data-col="desc">Descrição</th>
       <th data-col="fabricante">Fabricante</th><th data-col="data_compra">Data Compra</th>
-      <th data-col="dias">Dias em Estoque</th><th data-col="valor">Valor</th>
+      <th data-col="dias" class="num">Dias em Estoque</th><th data-col="valor" class="num">Valor</th>
     </tr></thead>
     <tbody id="tbody-acessorios-tim"></tbody>
   </table>
@@ -758,8 +758,8 @@ def secao_devolvidos(mtime, resumo):
   <table id="tbl-devolvidos">
     <thead><tr>
       <th data-col="filial">Filial</th><th data-col="desc">Descrição</th><th data-col="grupo">Categoria</th>
-      <th data-col="fabricante">Fabricante</th><th data-col="saldo">Saldo</th><th data-col="custo">Custo Unit.</th>
-      <th data-col="custo_total">Custo Total</th><th data-col="data_mov">Última Movimentação</th>
+      <th data-col="fabricante">Fabricante</th><th data-col="saldo" class="num">Saldo</th><th data-col="custo" class="num">Custo Unit.</th>
+      <th data-col="custo_total" class="num">Custo Total</th><th data-col="data_mov">Última Movimentação</th>
     </tr></thead>
     <tbody id="tbody-devolvidos"></tbody>
   </table>
@@ -818,7 +818,7 @@ def secao_manutencoes(mtime, resumo):
   </div>
   <div class="table-wrap">
   <table id="tbl-manutencoes" class="sortable">
-    <thead><tr><th>Nº Chamado</th><th>Filial</th><th>Manutenção Solicitada</th><th>Status</th><th>Dias sem Conclusão</th><th>Observação</th></tr></thead>
+    <thead><tr><th>Nº Chamado</th><th>Filial</th><th>Manutenção Solicitada</th><th>Status</th><th class="num">Dias sem Conclusão</th><th>Observação</th></tr></thead>
     <tbody>
     {linhas_manutencoes()}
     </tbody>
@@ -852,7 +852,7 @@ def secao_malotes(mtime, resumo_filiais, resumo_log):
   </div>
   <div class="table-wrap">
   <table id="tbl-malotes-filial" class="sortable">
-    <thead><tr><th>Filial</th><th>Malotes na Filial</th><th>Malotes no ADM</th><th>Capacidade</th><th>Status ADM</th><th>Ação</th></tr></thead>
+    <thead><tr><th>Filial</th><th class="num">Malotes na Filial</th><th class="num">Malotes no ADM</th><th class="num">Capacidade</th><th>Status ADM</th><th>Ação</th></tr></thead>
     <tbody>
     {linhas_malotes()}
     </tbody>
@@ -871,8 +871,8 @@ def secao_malotes(mtime, resumo_filiais, resumo_log):
   <div class="table-wrap">
   <table id="tbl-malotes-log">
     <thead><tr>
-      <th data-col="id">ID</th><th data-col="solicitante">Solicitante</th><th data-col="filial">Filial Destino</th>
-      <th data-col="qtd">Qtde</th><th data-col="conteudo">Conteúdo</th><th data-col="data_sol">Data Solicitação</th>
+      <th data-col="id" class="num">ID</th><th data-col="solicitante">Solicitante</th><th data-col="filial">Filial Destino</th>
+      <th data-col="qtd" class="num">Qtde</th><th data-col="conteudo">Conteúdo</th><th data-col="data_sol">Data Solicitação</th>
       <th data-col="status">Status</th><th data-col="data_post">Data Postagem</th><th data-col="quem_postou">Quem Postou</th>
     </tr></thead>
     <tbody id="tbody-malotes-log"></tbody>
@@ -941,7 +941,7 @@ html = rf"""<!DOCTYPE html>
   table.sortable th {{ cursor: pointer; user-select: none; }}
   table.sortable th:hover {{ color: var(--text); }}
   table.sortable th .sort-ind {{ color: var(--accent); }}
-  td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+  td.num, th.num {{ text-align: center; font-variant-numeric: tabular-nums; }}
   .pill {{ display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }}
   .pill.ok {{ background: rgba(34,197,94,.15); color: var(--ok); }}
   .pill.warn {{ background: rgba(245,158,11,.15); color: var(--warn); }}
@@ -1034,7 +1034,7 @@ html = rf"""<!DOCTYPE html>
   </div>
   <div class="table-wrap">
   <table id="tbl-pedidos-filial" class="sortable">
-    <thead><tr><th>Filial</th><th>Total</th><th>Entregue</th><th>Pendente</th><th>Atrasado</th><th>% Entregue</th></tr></thead>
+    <thead><tr><th>Filial</th><th class="num">Total</th><th class="num">Entregue</th><th class="num">Pendente</th><th class="num">Atrasado</th><th class="num">% Entregue</th></tr></thead>
     <tbody>
     {linhas_pedidos_filiais()}
     </tbody>
@@ -1056,8 +1056,8 @@ html = rf"""<!DOCTYPE html>
   <table id="tbl-pedidos-detalhe">
     <thead><tr>
       <th data-col="dreal">Data Realização</th><th data-col="dproc">Data Processamento</th><th data-col="dprev">Data Prevista Entrega</th>
-      <th data-col="fil">Filial Destino</th><th data-col="ped">Nº Pedido GN</th><th data-col="qtd">Qtde</th><th data-col="desc">Descrição do Produto</th>
-      <th data-col="stprod">Status do Produto</th><th data-col="dias">Dias em Aberto</th><th data-col="entrada">Entrada no Sistema</th><th data-col="status">Status</th>
+      <th data-col="fil">Filial Destino</th><th data-col="ped" class="num">Nº Pedido GN</th><th data-col="qtd" class="num">Qtde</th><th data-col="desc">Descrição do Produto</th>
+      <th data-col="stprod">Status do Produto</th><th data-col="dias" class="num">Dias em Aberto</th><th data-col="entrada">Entrada no Sistema</th><th data-col="status">Status</th>
     </tr></thead>
     <tbody id="tbody-pedidos-detalhe"></tbody>
   </table>
@@ -1087,7 +1087,7 @@ html = rf"""<!DOCTYPE html>
   </div>
   <div class="table-wrap">
   <table id="tbl-notas" class="sortable">
-    <thead><tr><th>Filial</th><th>Nota Fiscal</th><th>Descrição</th><th>Qtde</th><th>Dia da Entrega</th><th>Dias em Atraso</th></tr></thead>
+    <thead><tr><th>Filial</th><th>Nota Fiscal</th><th>Descrição</th><th class="num">Qtde</th><th>Dia da Entrega</th><th class="num">Dias em Atraso</th></tr></thead>
     <tbody>
     {linhas_notas()}
     </tbody>
@@ -1123,9 +1123,9 @@ html = rf"""<!DOCTYPE html>
   <div class="table-wrap">
   <table id="tbl-transf">
     <thead><tr>
-      <th data-col="orig">Filial Origem</th><th data-col="dias">Dias fora do estoque</th><th data-col="dest">Filial Destino</th>
+      <th data-col="orig">Filial Origem</th><th data-col="dias" class="num">Dias fora do estoque</th><th data-col="dest">Filial Destino</th>
       <th data-col="user">Usuário Solicitante</th><th data-col="nf">NF</th><th data-col="prod">Produto</th>
-      <th data-col="desc">Descrição</th><th data-col="qtd">Qtde</th><th data-col="crit">Criticidade</th>
+      <th data-col="desc">Descrição</th><th data-col="qtd" class="num">Qtde</th><th data-col="crit">Criticidade</th>
     </tr></thead>
     <tbody id="tbody-transf"></tbody>
   </table>
