@@ -143,7 +143,7 @@ transf_criticas = [r for r in data_rows if r[11] == "CRÍTICO"]
 transf_todas = [r for r in data_rows if r[0] is not None]
 transf_todas.sort(key=lambda r: (r[2] or 0), reverse=True)
 
-# -------------------------------------------------- PELÍCULAS (AMET / DEVIA)
+# -------------------------------------------------- PELÍCULAS (AMET / DEVIA / UPMASTER)
 # lê pelas posições do cabeçalho (linha com "Filial"/"Total Geral") em vez de índice fixo de
 # coluna, pois a planilha já mudou de estrutura (colunas de produto adicionadas/removidas).
 def localizar_colunas_estoque_vendas(rows):
@@ -172,28 +172,74 @@ def capturar_totais(rows, col_filial, col_total):
     return out
 
 
+def limpar_nome_produto(nome, marca):
+    n = nome
+    if "(" in n and "un por caixa)" in n:
+        n = n.split("(")[0]
+    n = n.strip().replace("PELICULA ", "").replace(f"{marca} ", "").strip()
+    return n.title()
+
+
+def capturar_produtos_e_totais(rows, col_filial, col_total):
+    """Como capturar_totais, mas também devolve a quantidade de cada produto individual
+    (as colunas entre 'Filial' e 'Total Geral'), não só o total."""
+    header = next(r for r in rows if r[col_filial] == "Filial")
+    produtos_cols = list(range(col_filial + 1, col_total))
+    produtos_labels_brutos = [header[c] for c in produtos_cols]
+    out = {}
+    capturando = False
+    for r in rows:
+        if len(r) <= col_total:
+            continue
+        if r[col_filial] == "Filial":
+            capturando = True
+            continue
+        if capturando:
+            if r[col_filial] is None:
+                continue
+            if r[col_filial] == "Total Geral":
+                break
+            produtos = {produtos_labels_brutos[i]: (r[c] or 0) for i, c in enumerate(produtos_cols)}
+            out[r[col_filial]] = {"produtos": produtos, "total": r[col_total] or 0}
+    return produtos_labels_brutos, out
+
+
+def carregar_pelicula(arquivo, aba, marca, filiais_mestre=None):
+    mtime = mtime_str(arquivo)
+    rows = load(arquivo, aba)
+    data_estoque = (rows[0][0] or "").split("ATUALIZADO DIA ")[-1].rstrip(")")
+
+    col_filial_1, col_total_1, col_filial_2, col_total_2 = localizar_colunas_estoque_vendas(rows)
+    periodo_vendas = (rows[0][col_filial_2] or "").split("(DO DIA ")[-1].rstrip(")")
+
+    produtos_brutos, estoque_info = capturar_produtos_e_totais(rows, col_filial_1, col_total_1)
+    vendido_por_filial = capturar_totais(rows, col_filial_2, col_total_2)
+    produtos_labels = [limpar_nome_produto(p, marca) for p in produtos_brutos]
+
+    nomes = set(estoque_info) | set(vendido_por_filial)
+    if filiais_mestre:
+        nomes |= set(filiais_mestre)
+
+    filiais = []
+    for nome in sorted(nomes):
+        info = estoque_info.get(nome, {"produtos": {}, "total": 0})
+        produtos_limpos = {limpo: info["produtos"].get(bruto, 0) for bruto, limpo in zip(produtos_brutos, produtos_labels)}
+        filiais.append({
+            "filial": nome, "produtos": produtos_limpos,
+            "estoque": info["total"], "vendido": vendido_por_filial.get(nome, 0),
+        })
+    filiais.sort(key=lambda f: f["vendido"], reverse=True)
+
+    return {
+        "mtime": mtime, "data_estoque": data_estoque, "periodo_vendas": periodo_vendas,
+        "filiais": filiais, "produtos_labels": produtos_labels,
+        "estoque_total": sum(f["estoque"] for f in filiais),
+        "vendido_total": sum(f["vendido"] for f in filiais),
+    }
+
+
 # ------------------------------------------------------------- AMET
-amet_mtime = mtime_str("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx")
-rows = load("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx", "AMET NAS FILIAIS")
-
-amet_data_estoque = (rows[0][0] or "").split("ATUALIZADO DIA ")[-1].rstrip(")")
-
-col_filial_1, col_total_1, col_filial_2, col_total_2 = localizar_colunas_estoque_vendas(rows)
-
-amet_periodo_vendas = (rows[0][col_filial_2] or "").split("(DO DIA ")[-1].rstrip(")")
-
-amet_estoque_por_filial = capturar_totais(rows, col_filial_1, col_total_1)
-amet_vendido_por_filial = capturar_totais(rows, col_filial_2, col_total_2)
-
-amet_filiais = []
-for nome in sorted(set(amet_estoque_por_filial) | set(amet_vendido_por_filial)):
-    estoque = amet_estoque_por_filial.get(nome, 0)
-    vendido = amet_vendido_por_filial.get(nome, 0)
-    amet_filiais.append({"filial": nome, "estoque": estoque, "vendido": vendido})
-amet_filiais.sort(key=lambda f: f["vendido"], reverse=True)
-
-amet_estoque_total = sum(amet_estoque_por_filial.values())
-amet_vendido_total = sum(amet_vendido_por_filial.values())
+amet = carregar_pelicula("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx", "AMET NAS FILIAIS", "AMET")
 
 # ------------------------------------------------------- ACESSÓRIOS
 acessorios_mtime = mtime_str("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx")
@@ -202,29 +248,9 @@ acessorios_rows = [r for r in acessorios_rows if r.get("Filial") is not None]
 
 FILIAIS_MESTRE = sorted(set(r.get("Filial") for r in acessorios_rows if r.get("Filial")))
 
-# ------------------------------------------------------------ DEVIA
-devia_mtime = mtime_str("CONTROLE QUANTIDADE DE DEVIA NAS FILIAIS.xlsx")
-rows = load("CONTROLE QUANTIDADE DE DEVIA NAS FILIAIS.xlsx", "DEVIA NAS FILIAIS")
-
-devia_data_estoque = (rows[0][0] or "").split("ATUALIZADO DIA ")[-1].rstrip(")")
-
-dcol_filial_1, dcol_total_1, dcol_filial_2, dcol_total_2 = localizar_colunas_estoque_vendas(rows)
-
-devia_periodo_vendas = (rows[0][dcol_filial_2] or "").split("(DO DIA ")[-1].rstrip(")")
-
-devia_estoque_por_filial = capturar_totais(rows, dcol_filial_1, dcol_total_1)
-devia_vendido_por_filial = capturar_totais(rows, dcol_filial_2, dcol_total_2)
-
 # mostra as 35 filiais da lista mestra, mesmo as que não têm nenhum registro na planilha
-devia_filiais = []
-for nome in sorted(set(FILIAIS_MESTRE) | set(devia_estoque_por_filial) | set(devia_vendido_por_filial)):
-    estoque = devia_estoque_por_filial.get(nome, 0)
-    vendido = devia_vendido_por_filial.get(nome, 0)
-    devia_filiais.append({"filial": nome, "estoque": estoque, "vendido": vendido})
-devia_filiais.sort(key=lambda f: f["vendido"], reverse=True)
-
-devia_estoque_total = sum(devia_estoque_por_filial.values())
-devia_vendido_total = sum(devia_vendido_por_filial.values())
+devia = carregar_pelicula("CONTROLE QUANTIDADE DE DEVIA NAS FILIAIS.xlsx", "DEVIA NAS FILIAIS", "DEVIA", FILIAIS_MESTRE)
+upmaster = carregar_pelicula("CONTROLE QUANTIDADE DE UPMASTER NAS FILIAIS.xlsx", "Planilha1", "UPMASTER", FILIAIS_MESTRE)
 
 
 def montar_acessorios(rows):
@@ -398,6 +424,49 @@ malotes_log_resumo = {
 }
 malotes_log_json = json.dumps(malotes_log_itens, ensure_ascii=False)
 
+# ---------------------------------------------------------- MANUTENÇÕES
+manutencoes_mtime = mtime_str("CONTROLE DE MANUTENÇÕES.xlsx")
+
+MANUTENCAO_STATUS_CLASSE = {
+    "PENDENTE": "warn", "EM ANDAMENTO": "warn",
+    "CONCLUÍDO": "ok", "CONCLUIDO": "ok", "CONCLUÍDA": "ok", "CONCLUIDA": "ok",
+    "CANCELADO": "bad", "CANCELADA": "bad",
+}
+
+manutencoes_itens = []
+for r in load_dicts("CONTROLE DE MANUTENÇÕES.xlsx", "CONTROLE MANUTENÇÕES"):
+    chamado = r.get("N° DO CHAMADO")
+    if not chamado:
+        continue
+    status = str(r.get("STATUS") or "-").strip()
+    dias = r.get("DIAS SEM CONCLUSÃO")
+    manutencoes_itens.append({
+        "chamado": chamado, "filial": r.get("FILIAL") or "-",
+        "solicitado": r.get("MANUTENÇÕES SOLICITADAS") or "-",
+        "status": status, "status_cls": MANUTENCAO_STATUS_CLASSE.get(status.upper(), ""),
+        "dias": dias if isinstance(dias, (int, float)) else "-",
+        "obs": r.get("OBSERVAÇÃO") or "-",
+    })
+manutencoes_itens.sort(key=lambda x: x["dias"] if isinstance(x["dias"], (int, float)) else -1, reverse=True)
+
+manutencoes_por_filial = {}
+for it in manutencoes_itens:
+    manutencoes_por_filial[it["filial"]] = manutencoes_por_filial.get(it["filial"], 0) + 1
+manutencoes_filiais_ordenadas = sorted(manutencoes_por_filial.items(), key=lambda kv: kv[1], reverse=True)
+
+manutencoes_status_buckets = {}
+for it in manutencoes_itens:
+    manutencoes_status_buckets[it["status"]] = manutencoes_status_buckets.get(it["status"], 0) + 1
+
+dias_manutencoes_validos = [x["dias"] for x in manutencoes_itens if isinstance(x["dias"], (int, float))]
+manutencoes_resumo = {
+    "total": len(manutencoes_itens),
+    "pendentes": sum(1 for x in manutencoes_itens if x["status"].upper() == "PENDENTE"),
+    "concluidas": sum(1 for x in manutencoes_itens if x["status"].upper() in ("CONCLUÍDO", "CONCLUIDO", "CONCLUÍDA", "CONCLUIDA")),
+    "filiais": len(manutencoes_por_filial),
+    "dias_medio": round(sum(dias_manutencoes_validos) / len(dias_manutencoes_validos), 1) if dias_manutencoes_validos else 0,
+}
+
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
 chart_data = {
@@ -432,14 +501,19 @@ chart_data = {
         ],
     },
     "amet": {
-        "labels": [f["filial"] for f in amet_filiais],
-        "estoque": [f["estoque"] for f in amet_filiais],
-        "vendido": [f["vendido"] for f in amet_filiais],
+        "labels": [f["filial"] for f in amet["filiais"]],
+        "estoque": [f["estoque"] for f in amet["filiais"]],
+        "vendido": [f["vendido"] for f in amet["filiais"]],
     },
     "devia": {
-        "labels": [f["filial"] for f in devia_filiais],
-        "estoque": [f["estoque"] for f in devia_filiais],
-        "vendido": [f["vendido"] for f in devia_filiais],
+        "labels": [f["filial"] for f in devia["filiais"]],
+        "estoque": [f["estoque"] for f in devia["filiais"]],
+        "vendido": [f["vendido"] for f in devia["filiais"]],
+    },
+    "upmaster": {
+        "labels": [f["filial"] for f in upmaster["filiais"]],
+        "estoque": [f["estoque"] for f in upmaster["filiais"]],
+        "vendido": [f["vendido"] for f in upmaster["filiais"]],
     },
     "acessoriosDiversos": {
         "labels": [f[0] for f in acessorios_diversos_filiais],
@@ -461,6 +535,14 @@ chart_data = {
         "labels": [f["filial"] for f in malotes_filiais],
         "na_filial": [f["na_filial"] for f in malotes_filiais],
         "no_adm": [f["no_adm"] for f in malotes_filiais],
+    },
+    "manutencoesStatus": {
+        "labels": list(manutencoes_status_buckets.keys()),
+        "values": list(manutencoes_status_buckets.values()),
+    },
+    "manutencoesFilial": {
+        "labels": [f[0] for f in manutencoes_filiais_ordenadas],
+        "values": [f[1] for f in manutencoes_filiais_ordenadas],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -529,30 +611,48 @@ for r in transf_todas:
 transf_todas_json = json.dumps(transf_todas_data, ensure_ascii=False)
 
 
-def linhas_amet():
-    out = []
-    for f in amet_filiais:
+def secao_pelicula(id_, titulo, dados, prefixo):
+    produtos_labels = dados["produtos_labels"]
+    colunas_produtos = "".join(f"<th class='num'>{p}</th>" for p in produtos_labels)
+    linhas = []
+    for f in dados["filiais"]:
         giro = pct(f["vendido"] / f["estoque"]) if f["estoque"] else "-"
-        out.append(
-            "<tr><td>{fil}</td><td class='num'>{est}</td><td class='num'>{ven}</td>"
-            "<td class='num'>{giro}</td></tr>".format(
-                fil=f["filial"], est=f["estoque"], ven=f["vendido"], giro=giro
-            )
+        cels_produtos = "".join(
+            f"<td class='num'>{f['produtos'].get(p, 0)}</td>" for p in produtos_labels
         )
-    return "\n".join(out)
-
-
-def linhas_devia():
-    out = []
-    for f in devia_filiais:
-        giro = pct(f["vendido"] / f["estoque"]) if f["estoque"] else "-"
-        out.append(
-            "<tr><td>{fil}</td><td class='num'>{est}</td><td class='num'>{ven}</td>"
-            "<td class='num'>{giro}</td></tr>".format(
-                fil=f["filial"], est=f["estoque"], ven=f["vendido"], giro=giro
-            )
+        linhas.append(
+            f"<tr><td>{f['filial']}</td>{cels_produtos}"
+            f"<td class='num'>{f['estoque']}</td><td class='num'>{f['vendido']}</td>"
+            f"<td class='num'>{giro}</td></tr>"
         )
-    return "\n".join(out)
+    linhas_html = "\n".join(linhas)
+    return f"""
+<section id="{id_}">
+  <h2>{titulo}</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {dados['mtime']} · Estoque referente a {dados['data_estoque']} · Vendas de {dados['periodo_vendas']}</p>
+  <div class="cards">
+    <div class="card"><div class="label">Estoque total (peças)</div><div class="value">{dados['estoque_total']}</div></div>
+    <div class="card ok"><div class="label">Vendido no período (peças)</div><div class="value">{dados['vendido_total']}</div></div>
+    <div class="card"><div class="label">Filiais monitoradas</div><div class="value">{len(dados['filiais'])}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box wide"><h4>Estoque x Vendido por filial <button class="chart-export-btn" data-chart-export="chart-{prefixo}-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-{prefixo}-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Estoque por tipo e vendas por filial</h3>
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-{prefixo}" placeholder="Filtrar por filial...">
+    <button class="table-export-btn" data-export="tbl-{prefixo}">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-{prefixo}" class="sortable">
+    <thead><tr><th>Filial</th>{colunas_produtos}<th>Total Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
+    <tbody>
+    {linhas_html}
+    </tbody>
+  </table>
+  </div>
+</section>
+"""
 
 
 def secao_acessorios(id_, titulo, mtime, resumo, prefixo):
@@ -680,6 +780,52 @@ def linhas_malotes():
             )
         )
     return "\n".join(out)
+
+
+def linhas_manutencoes():
+    out = []
+    for m in manutencoes_itens:
+        out.append(
+            "<tr><td>{chamado}</td><td>{fil}</td><td>{sol}</td>"
+            "<td><span class='pill {s_cls}'>{s}</span></td><td class='num'>{dias}</td><td>{obs}</td></tr>".format(
+                chamado=m["chamado"], fil=m["filial"], sol=m["solicitado"],
+                s=m["status"], s_cls=m["status_cls"], dias=m["dias"], obs=m["obs"]
+            )
+        )
+    return "\n".join(out)
+
+
+def secao_manutencoes(mtime, resumo):
+    return f"""
+<section id="manutencoes">
+  <h2>🔧 Solicitações de Manutenções</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {mtime}</p>
+  <div class="cards">
+    <div class="card"><div class="label">Total de Chamados</div><div class="value">{resumo['total']}</div></div>
+    <div class="card warn"><div class="label">Pendentes</div><div class="value">{resumo['pendentes']}</div></div>
+    <div class="card ok"><div class="label">Concluídas</div><div class="value">{resumo['concluidas']}</div></div>
+    <div class="card"><div class="label">Filiais com Chamados</div><div class="value">{resumo['filiais']}</div></div>
+    <div class="card"><div class="label">Dias Médio sem Conclusão</div><div class="value">{resumo['dias_medio']}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box"><h4>Status dos chamados <button class="chart-export-btn" data-chart-export="chart-manutencoes-status" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-manutencoes-status"></canvas></div></div>
+    <div class="chart-box wide"><h4>Chamados por filial <button class="chart-export-btn" data-chart-export="chart-manutencoes-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-manutencoes-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Chamados de manutenção</h3>
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-manutencoes" placeholder="Filtrar por filial, chamado ou status...">
+    <button class="table-export-btn" data-export="tbl-manutencoes">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-manutencoes" class="sortable">
+    <thead><tr><th>Nº Chamado</th><th>Filial</th><th>Manutenção Solicitada</th><th>Status</th><th>Dias sem Conclusão</th><th>Observação</th></tr></thead>
+    <tbody>
+    {linhas_manutencoes()}
+    </tbody>
+  </table>
+  </div>
+</section>
+"""
 
 
 def secao_malotes(mtime, resumo_filiais, resumo_log):
@@ -843,6 +989,8 @@ html = rf"""<!DOCTYPE html>
   <a href="#transferencias" class="nav-link">🔄 Transferências</a>
   <a href="#amet" class="nav-link">🛡️ Películas AMET</a>
   <a href="#devia" class="nav-link">🛡️ Películas DEVIA</a>
+  <a href="#upmaster" class="nav-link">🛡️ Películas UPMASTER</a>
+  <a href="#manutencoes" class="nav-link">🔧 Solicitações de Manutenções</a>
   <a href="#acessorios" class="nav-link">🎧 Acessórios</a>
   <a href="#acessorios-tim" class="nav-link">📶 Fidelizados TIM</a>
   <a href="#devolvidos" class="nav-link">♻️ Devolvidos e Defeitos</a>
@@ -983,57 +1131,13 @@ html = rf"""<!DOCTYPE html>
   <div class="pager" id="contador-transf"></div>
 </section>
 
-<section id="amet">
-  <h2>🛡️ Películas AMET por Filial</h2>
-  <p class="secao-mtime">🕒 Planilha atualizada em {amet_mtime} · Estoque referente a {amet_data_estoque} · Vendas de {amet_periodo_vendas}</p>
-  <div class="cards">
-    <div class="card"><div class="label">Estoque total (peças)</div><div class="value">{amet_estoque_total}</div></div>
-    <div class="card ok"><div class="label">Vendido no período (peças)</div><div class="value">{amet_vendido_total}</div></div>
-    <div class="card"><div class="label">Filiais monitoradas</div><div class="value">{len(amet_filiais)}</div></div>
-  </div>
-  <div class="charts">
-    <div class="chart-box wide"><h4>Estoque x Vendido por filial <button class="chart-export-btn" data-chart-export="chart-amet-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-amet-filial"></canvas></div></div>
-  </div>
-  <h3>📋 Estoque e vendas por filial</h3>
-  <div class="table-toolbar">
-    <input class="filtro" data-target="tbl-amet" placeholder="Filtrar por filial...">
-    <button class="table-export-btn" data-export="tbl-amet">📥 Exportar Excel</button>
-  </div>
-  <div class="table-wrap">
-  <table id="tbl-amet" class="sortable">
-    <thead><tr><th>Filial</th><th>Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
-    <tbody>
-    {linhas_amet()}
-    </tbody>
-  </table>
-  </div>
-</section>
+{secao_pelicula("amet", "🛡️ Películas AMET por Filial", amet, "amet")}
 
-<section id="devia">
-  <h2>🛡️ Películas DEVIA por Filial</h2>
-  <p class="secao-mtime">🕒 Planilha atualizada em {devia_mtime} · Estoque referente a {devia_data_estoque} · Vendas de {devia_periodo_vendas}</p>
-  <div class="cards">
-    <div class="card"><div class="label">Estoque total (peças)</div><div class="value">{devia_estoque_total}</div></div>
-    <div class="card ok"><div class="label">Vendido no período (peças)</div><div class="value">{devia_vendido_total}</div></div>
-    <div class="card"><div class="label">Filiais</div><div class="value">{len(devia_filiais)}</div></div>
-  </div>
-  <div class="charts">
-    <div class="chart-box wide"><h4>Estoque x Vendido por filial <button class="chart-export-btn" data-chart-export="chart-devia-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-devia-filial"></canvas></div></div>
-  </div>
-  <h3>📋 Estoque e vendas por filial</h3>
-  <div class="table-toolbar">
-    <input class="filtro" data-target="tbl-devia" placeholder="Filtrar por filial...">
-    <button class="table-export-btn" data-export="tbl-devia">📥 Exportar Excel</button>
-  </div>
-  <div class="table-wrap">
-  <table id="tbl-devia" class="sortable">
-    <thead><tr><th>Filial</th><th>Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
-    <tbody>
-    {linhas_devia()}
-    </tbody>
-  </table>
-  </div>
-</section>
+{secao_pelicula("devia", "🛡️ Películas DEVIA por Filial", devia, "devia")}
+
+{secao_pelicula("upmaster", "🛡️ Películas UPMASTER por Filial", upmaster, "upmaster")}
+
+{secao_manutencoes(manutencoes_mtime, manutencoes_resumo)}
 
 {secao_acessorios("acessorios", "🎧 Acessórios nas Filiais", acessorios_mtime, acessorios_diversos_resumo, "acessorios")}
 {secao_seriais_tim(acessorios_mtime, seriais_resumo)}
@@ -1245,7 +1349,7 @@ document.addEventListener('click', function(e) {{
   }}
 }});
 
-['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-devia', 'tbl-transf', 'tbl-malotes-filial'].forEach(registrarExportDOM);
+['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-devia', 'tbl-upmaster', 'tbl-transf', 'tbl-malotes-filial', 'tbl-manutencoes'].forEach(registrarExportDOM);
 
 // ---- fabrica generica de tabela paginada com busca + multi-selecao, usada pelas tabelas de acessorios ----
 function criarTabelaPaginada(opts) {{
@@ -1879,6 +1983,23 @@ new Chart(document.getElementById('chart-devia-filial'), {{
   }}
 }});
 
+new Chart(document.getElementById('chart-upmaster-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.upmaster.labels,
+    datasets: [
+      {{ label: 'Estoque', data: CHART_DATA.upmaster.estoque, backgroundColor: COR_ACCENT }},
+      {{ label: 'Vendido', data: CHART_DATA.upmaster.vendido, backgroundColor: COR_OK }}
+    ]
+  }},
+  options: {{
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {{ legend: {{ position: 'bottom' }} }}
+  }}
+}});
+
 new Chart(document.getElementById('chart-acessorios-filial'), {{
   type: 'bar',
   data: {{
@@ -1932,6 +2053,28 @@ new Chart(document.getElementById('chart-malotes-filial'), {{
     ]
   }},
   options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }}, plugins: {{ legend: {{ position: 'bottom' }} }} }}
+}});
+
+var CORES_STATUS_MANUTENCOES = {{ 'PENDENTE': COR_WARN, 'EM ANDAMENTO': COR_WARN, 'CONCLUÍDO': COR_OK, 'CONCLUIDO': COR_OK, 'CONCLUÍDA': COR_OK, 'CONCLUIDA': COR_OK, 'CANCELADO': COR_BAD, 'CANCELADA': COR_BAD }};
+new Chart(document.getElementById('chart-manutencoes-status'), {{
+  type: 'doughnut',
+  data: {{
+    labels: CHART_DATA.manutencoesStatus.labels,
+    datasets: [{{
+      data: CHART_DATA.manutencoesStatus.values,
+      backgroundColor: CHART_DATA.manutencoesStatus.labels.map(function(l) {{ return CORES_STATUS_MANUTENCOES[l] || COR_ACCENT; }})
+    }}]
+  }},
+  options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
+}});
+
+new Chart(document.getElementById('chart-manutencoes-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.manutencoesFilial.labels,
+    datasets: [{{ label: 'Chamados', data: CHART_DATA.manutencoesFilial.values, backgroundColor: COR_ACCENT }}]
+  }},
+  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
 }});
 </script>
 </body>
