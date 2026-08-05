@@ -992,7 +992,7 @@ html = rf"""<!DOCTYPE html>
   <a href="#amet" class="nav-link"><span class="nav-icon">🛡️</span><span class="nav-label">Películas AMET</span></a>
   <a href="#devia" class="nav-link"><span class="nav-icon">🛡️</span><span class="nav-label">Películas DEVIA</span></a>
   <a href="#upmaster" class="nav-link"><span class="nav-icon">🛡️</span><span class="nav-label">Películas UPMASTER</span></a>
-  <a href="#manutencoes" class="nav-link"><span class="nav-icon">🔧</span><span class="nav-label">Solicitações de Manutenções</span></a>
+  <a href="#manutencoes" class="nav-link"><span class="nav-icon">🔧</span><span class="nav-label">Manutenções</span></a>
   <a href="#acessorios" class="nav-link"><span class="nav-icon">🎧</span><span class="nav-label">Acessórios</span></a>
   <a href="#acessorios-tim" class="nav-link"><span class="nav-icon">📶</span><span class="nav-label">Fidelizados TIM</span></a>
   <a href="#devolvidos" class="nav-link"><span class="nav-icon">♻️</span><span class="nav-label">Devolvidos e Defeitos</span></a>
