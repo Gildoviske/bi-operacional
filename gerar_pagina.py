@@ -143,23 +143,18 @@ transf_criticas = [r for r in data_rows if r[11] == "CRÍTICO"]
 transf_todas = [r for r in data_rows if r[0] is not None]
 transf_todas.sort(key=lambda r: (r[2] or 0), reverse=True)
 
-# ------------------------------------------------------------- AMET
-amet_mtime = mtime_str("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx")
-rows = load("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx", "AMET NAS FILIAIS")
-
-amet_data_estoque = (rows[0][0] or "").split("ATUALIZADO DIA ")[-1].rstrip(")")
-
+# -------------------------------------------------- PELÍCULAS (AMET / DEVIA)
 # lê pelas posições do cabeçalho (linha com "Filial"/"Total Geral") em vez de índice fixo de
 # coluna, pois a planilha já mudou de estrutura (colunas de produto adicionadas/removidas).
-header = next(r for r in rows if r[0] == "Filial")
-col_filial_1, col_total_1 = 0, header.index("Total Geral")
-col_filial_2 = header.index("Filial", col_total_1 + 1)
-col_total_2 = header.index("Total Geral", col_filial_2 + 1)
+def localizar_colunas_estoque_vendas(rows):
+    header = next(r for r in rows if r[0] == "Filial")
+    col_filial_1, col_total_1 = 0, header.index("Total Geral")
+    col_filial_2 = header.index("Filial", col_total_1 + 1)
+    col_total_2 = header.index("Total Geral", col_filial_2 + 1)
+    return col_filial_1, col_total_1, col_filial_2, col_total_2
 
-amet_periodo_vendas = (rows[0][col_filial_2] or "").split("(DO DIA ")[-1].rstrip(")")
 
-
-def capturar_totais(col_filial, col_total):
+def capturar_totais(rows, col_filial, col_total):
     out = {}
     capturando = False
     for r in rows:
@@ -177,8 +172,18 @@ def capturar_totais(col_filial, col_total):
     return out
 
 
-amet_estoque_por_filial = capturar_totais(col_filial_1, col_total_1)
-amet_vendido_por_filial = capturar_totais(col_filial_2, col_total_2)
+# ------------------------------------------------------------- AMET
+amet_mtime = mtime_str("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx")
+rows = load("CONTROLE QUANTIDADE DE AMET NAS FILIAIS.xlsx", "AMET NAS FILIAIS")
+
+amet_data_estoque = (rows[0][0] or "").split("ATUALIZADO DIA ")[-1].rstrip(")")
+
+col_filial_1, col_total_1, col_filial_2, col_total_2 = localizar_colunas_estoque_vendas(rows)
+
+amet_periodo_vendas = (rows[0][col_filial_2] or "").split("(DO DIA ")[-1].rstrip(")")
+
+amet_estoque_por_filial = capturar_totais(rows, col_filial_1, col_total_1)
+amet_vendido_por_filial = capturar_totais(rows, col_filial_2, col_total_2)
 
 amet_filiais = []
 for nome in sorted(set(amet_estoque_por_filial) | set(amet_vendido_por_filial)):
@@ -194,6 +199,32 @@ amet_vendido_total = sum(amet_vendido_por_filial.values())
 acessorios_mtime = mtime_str("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx")
 acessorios_rows = load_dicts("CONTROLE CONFIGURAÇÕES PRODUTOS.xlsx", "SALDO PRODUTOS NAS FILIAIS")
 acessorios_rows = [r for r in acessorios_rows if r.get("Filial") is not None]
+
+FILIAIS_MESTRE = sorted(set(r.get("Filial") for r in acessorios_rows if r.get("Filial")))
+
+# ------------------------------------------------------------ DEVIA
+devia_mtime = mtime_str("CONTROLE QUANTIDADE DE DEVIA NAS FILIAIS.xlsx")
+rows = load("CONTROLE QUANTIDADE DE DEVIA NAS FILIAIS.xlsx", "DEVIA NAS FILIAIS")
+
+devia_data_estoque = (rows[0][0] or "").split("ATUALIZADO DIA ")[-1].rstrip(")")
+
+dcol_filial_1, dcol_total_1, dcol_filial_2, dcol_total_2 = localizar_colunas_estoque_vendas(rows)
+
+devia_periodo_vendas = (rows[0][dcol_filial_2] or "").split("(DO DIA ")[-1].rstrip(")")
+
+devia_estoque_por_filial = capturar_totais(rows, dcol_filial_1, dcol_total_1)
+devia_vendido_por_filial = capturar_totais(rows, dcol_filial_2, dcol_total_2)
+
+# mostra as 35 filiais da lista mestra, mesmo as que não têm nenhum registro na planilha
+devia_filiais = []
+for nome in sorted(set(FILIAIS_MESTRE) | set(devia_estoque_por_filial) | set(devia_vendido_por_filial)):
+    estoque = devia_estoque_por_filial.get(nome, 0)
+    vendido = devia_vendido_por_filial.get(nome, 0)
+    devia_filiais.append({"filial": nome, "estoque": estoque, "vendido": vendido})
+devia_filiais.sort(key=lambda f: f["vendido"], reverse=True)
+
+devia_estoque_total = sum(devia_estoque_por_filial.values())
+devia_vendido_total = sum(devia_vendido_por_filial.values())
 
 
 def montar_acessorios(rows):
@@ -405,6 +436,11 @@ chart_data = {
         "estoque": [f["estoque"] for f in amet_filiais],
         "vendido": [f["vendido"] for f in amet_filiais],
     },
+    "devia": {
+        "labels": [f["filial"] for f in devia_filiais],
+        "estoque": [f["estoque"] for f in devia_filiais],
+        "vendido": [f["vendido"] for f in devia_filiais],
+    },
     "acessoriosDiversos": {
         "labels": [f[0] for f in acessorios_diversos_filiais],
         "saldo": [f[1] for f in acessorios_diversos_filiais],
@@ -505,6 +541,18 @@ def linhas_amet():
         )
     return "\n".join(out)
 
+
+def linhas_devia():
+    out = []
+    for f in devia_filiais:
+        giro = pct(f["vendido"] / f["estoque"]) if f["estoque"] else "-"
+        out.append(
+            "<tr><td>{fil}</td><td class='num'>{est}</td><td class='num'>{ven}</td>"
+            "<td class='num'>{giro}</td></tr>".format(
+                fil=f["filial"], est=f["estoque"], ven=f["vendido"], giro=giro
+            )
+        )
+    return "\n".join(out)
 
 
 def secao_acessorios(id_, titulo, mtime, resumo, prefixo):
@@ -794,6 +842,7 @@ html = rf"""<!DOCTYPE html>
   <a href="#notas" class="nav-link">🧾 Notas Fiscais</a>
   <a href="#transferencias" class="nav-link">🔄 Transferências</a>
   <a href="#amet" class="nav-link">🛡️ Películas AMET</a>
+  <a href="#devia" class="nav-link">🛡️ Películas DEVIA</a>
   <a href="#acessorios" class="nav-link">🎧 Acessórios</a>
   <a href="#acessorios-tim" class="nav-link">📶 Fidelizados TIM</a>
   <a href="#devolvidos" class="nav-link">♻️ Devolvidos e Defeitos</a>
@@ -955,6 +1004,32 @@ html = rf"""<!DOCTYPE html>
     <thead><tr><th>Filial</th><th>Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
     <tbody>
     {linhas_amet()}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="devia">
+  <h2>🛡️ Películas DEVIA por Filial</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {devia_mtime} · Estoque referente a {devia_data_estoque} · Vendas de {devia_periodo_vendas}</p>
+  <div class="cards">
+    <div class="card"><div class="label">Estoque total (peças)</div><div class="value">{devia_estoque_total}</div></div>
+    <div class="card ok"><div class="label">Vendido no período (peças)</div><div class="value">{devia_vendido_total}</div></div>
+    <div class="card"><div class="label">Filiais</div><div class="value">{len(devia_filiais)}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box wide"><h4>Estoque x Vendido por filial <button class="chart-export-btn" data-chart-export="chart-devia-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-devia-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Estoque e vendas por filial</h3>
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-devia" placeholder="Filtrar por filial...">
+    <button class="table-export-btn" data-export="tbl-devia">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-devia" class="sortable">
+    <thead><tr><th>Filial</th><th>Estoque</th><th>Vendido (período)</th><th>Giro (vendido/estoque)</th></tr></thead>
+    <tbody>
+    {linhas_devia()}
     </tbody>
   </table>
   </div>
@@ -1170,7 +1245,7 @@ document.addEventListener('click', function(e) {{
   }}
 }});
 
-['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-transf', 'tbl-malotes-filial'].forEach(registrarExportDOM);
+['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-devia', 'tbl-transf', 'tbl-malotes-filial'].forEach(registrarExportDOM);
 
 // ---- fabrica generica de tabela paginada com busca + multi-selecao, usada pelas tabelas de acessorios ----
 function criarTabelaPaginada(opts) {{
@@ -1777,6 +1852,23 @@ new Chart(document.getElementById('chart-amet-filial'), {{
     datasets: [
       {{ label: 'Estoque', data: CHART_DATA.amet.estoque, backgroundColor: COR_ACCENT }},
       {{ label: 'Vendido', data: CHART_DATA.amet.vendido, backgroundColor: COR_OK }}
+    ]
+  }},
+  options: {{
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {{ legend: {{ position: 'bottom' }} }}
+  }}
+}});
+
+new Chart(document.getElementById('chart-devia-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.devia.labels,
+    datasets: [
+      {{ label: 'Estoque', data: CHART_DATA.devia.estoque, backgroundColor: COR_ACCENT }},
+      {{ label: 'Vendido', data: CHART_DATA.devia.vendido, backgroundColor: COR_OK }}
     ]
   }},
   options: {{
