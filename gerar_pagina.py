@@ -530,6 +530,15 @@ for it in despesas_itens:
     despesas_por_filial[it["filial"]] = despesas_por_filial.get(it["filial"], 0) + it["valor"]
 despesas_filiais_ordenadas = sorted(despesas_por_filial.items(), key=lambda kv: kv[1], reverse=True)
 
+despesas_por_mes = {}
+for it in despesas_itens:
+    chave = datetime.fromtimestamp(it["data_ts"] / 1000).strftime("%Y-%m")
+    bucket = despesas_por_mes.setdefault(chave, {"Material de Limpeza": 0, "Material de Escritório": 0, "Registro Manual": 0})
+    bucket[it["categoria"]] += it["valor"]
+MESES_PT = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+despesas_meses_ordenados = sorted(despesas_por_mes.keys())
+despesas_meses_labels = [f"{MESES_PT[int(m.split('-')[1])]}/{m.split('-')[0]}" for m in despesas_meses_ordenados]
+
 despesas_resumo = {
     "total_geral": round(sum(it["valor"] for it in despesas_itens), 2),
     "total_limpeza": round(despesas_por_categoria.get("Material de Limpeza", 0), 2),
@@ -624,6 +633,12 @@ chart_data = {
     "despesasFilial": {
         "labels": [f[0] for f in despesas_filiais_ordenadas],
         "values": [round(f[1], 2) for f in despesas_filiais_ordenadas],
+    },
+    "despesasMensal": {
+        "labels": despesas_meses_labels,
+        "limpeza": [round(despesas_por_mes[m]["Material de Limpeza"], 2) for m in despesas_meses_ordenados],
+        "escritorio": [round(despesas_por_mes[m]["Material de Escritório"], 2) for m in despesas_meses_ordenados],
+        "manual": [round(despesas_por_mes[m]["Registro Manual"], 2) for m in despesas_meses_ordenados],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -866,10 +881,13 @@ def secao_despesas(mtime, resumo):
   <div class="charts">
     <div class="chart-box"><h4>Total por categoria <button class="chart-export-btn" data-chart-export="chart-despesas-categoria" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-despesas-categoria"></canvas></div></div>
     <div class="chart-box wide"><h4>Total por filial <button class="chart-export-btn" data-chart-export="chart-despesas-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-despesas-filial"></canvas></div></div>
+    <div class="chart-box wide"><h4>Total por mês <button class="chart-export-btn" data-chart-export="chart-despesas-mensal" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-despesas-mensal"></canvas></div></div>
   </div>
   <h3>📋 Lançamentos de despesas</h3>
   <div class="filtros-pedidos">
     <input class="filtro" id="filtro-despesas" placeholder="Buscar por filial, fornecedor, documento, histórico...">
+    <label class="filtro-data">De <input type="date" id="despesas-data-de"></label>
+    <label class="filtro-data">Até <input type="date" id="despesas-data-ate"></label>
     <div class="msel" id="msel-despesas-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <div class="msel" id="msel-despesas-categoria"><button type="button" class="msel-btn" data-default="Todas as categorias">Todas as categorias</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
     <button id="limpar-despesas" type="button">Limpar filtros</button>
@@ -1086,6 +1104,8 @@ html = rf"""<!DOCTYPE html>
   input.filtro {{ width: 100%; max-width: 320px; padding: 8px 10px; margin-bottom: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }}
   .filtros-pedidos {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }}
   .filtros-pedidos input.filtro {{ margin-bottom: 0; flex: 1 1 240px; }}
+  .filtros-pedidos .filtro-data {{ display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }}
+  .filtros-pedidos .filtro-data input[type="date"] {{ padding: 7px 8px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); color-scheme: dark; }}
   .filtros-pedidos select {{ padding: 8px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); flex: 1 1 170px; }}
   .filtros-pedidos button {{ padding: 8px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; }}
   .filtros-pedidos button:hover {{ color: var(--text); border-color: var(--accent); }}
@@ -1484,10 +1504,22 @@ function criarTabelaPaginada(opts) {{
 
   function dadosFiltrados() {{
     var q = estado.filtro.toLowerCase();
+    var deTs = null, ateTs = null;
+    if (opts.filtroData) {{
+      var deVal = document.getElementById(opts.filtroData.deId).value;
+      var ateVal = document.getElementById(opts.filtroData.ateId).value;
+      if (deVal) deTs = new Date(deVal + 'T00:00:00').getTime();
+      if (ateVal) ateTs = new Date(ateVal + 'T23:59:59').getTime();
+    }}
     var out = opts.dados.filter(function(r) {{
       if (q && opts.busca(r).toLowerCase().indexOf(q) === -1) return false;
       for (var campo in estado.sets) {{
         if (estado.sets[campo].size && !estado.sets[campo].has(r[campo])) return false;
+      }}
+      if (opts.filtroData) {{
+        var ts = r[opts.filtroData.campo];
+        if (deTs !== null && ts < deTs) return false;
+        if (ateTs !== null && ts > ateTs) return false;
       }}
       return true;
     }});
@@ -1540,6 +1572,15 @@ function criarTabelaPaginada(opts) {{
     render();
   }});
 
+  if (opts.filtroData) {{
+    [opts.filtroData.deId, opts.filtroData.ateId].forEach(function(id) {{
+      document.getElementById(id).addEventListener('change', function() {{
+        estado.pagina = 1;
+        render();
+      }});
+    }});
+  }}
+
   var msels = opts.filtros.map(function(f) {{
     var pares = f.pares || valoresUnicos(opts.dados, f.campo).map(function(v) {{ return [v, v]; }});
     return criarMultiSelect(f.id, pares, estado.sets[f.campo], function() {{
@@ -1551,6 +1592,10 @@ function criarTabelaPaginada(opts) {{
   document.getElementById(opts.limparId).addEventListener('click', function() {{
     estado.filtro = '';
     document.getElementById(opts.buscaId).value = '';
+    if (opts.filtroData) {{
+      document.getElementById(opts.filtroData.deId).value = '';
+      document.getElementById(opts.filtroData.ateId).value = '';
+    }}
     msels.forEach(function(m) {{ m.limpar(); }});
     estado.pagina = 1;
     render();
@@ -2031,6 +2076,7 @@ criarTabelaPaginada({{
   tbodyId: 'tbody-despesas', pagerId: 'pager-despesas', tableId: 'tbl-despesas',
   buscaId: 'filtro-despesas', limparId: 'limpar-despesas',
   colunas: DESPESAS_COLS, linhaHtml: linhaDespesaHtml, busca: buscaDespesa,
+  filtroData: {{ campo: 'data_ts', deId: 'despesas-data-de', ateId: 'despesas-data-ate' }},
   filtros: [
     {{ id: 'despesas-filial', campo: 'filial' }},
     {{ id: 'despesas-categoria', campo: 'categoria' }}
@@ -2269,6 +2315,26 @@ new Chart(document.getElementById('chart-despesas-filial'), {{
     plugins: {{
       legend: {{ display: false }},
       tooltip: {{ callbacks: {{ label: function(ctx) {{ return brlJs(ctx.parsed.x); }} }} }}
+    }}
+  }}
+}});
+
+new Chart(document.getElementById('chart-despesas-mensal'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.despesasMensal.labels,
+    datasets: [
+      {{ label: 'Material de Limpeza', data: CHART_DATA.despesasMensal.limpeza, backgroundColor: COR_ACCENT }},
+      {{ label: 'Material de Escritório', data: CHART_DATA.despesasMensal.escritorio, backgroundColor: COR_WARN }},
+      {{ label: 'Registro Manual', data: CHART_DATA.despesasMensal.manual, backgroundColor: COR_OK }}
+    ]
+  }},
+  options: {{
+    responsive: true, maintainAspectRatio: false,
+    scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }},
+    plugins: {{
+      legend: {{ position: 'bottom' }},
+      tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.dataset.label + ': ' + brlJs(ctx.parsed.y); }} }} }}
     }}
   }}
 }});
