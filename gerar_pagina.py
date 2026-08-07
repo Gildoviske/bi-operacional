@@ -2385,7 +2385,7 @@ new Chart(document.getElementById('chart-despesas-mensal'), {{
   }}
 }});
 
-var PALETA_FILIAIS = ['#38bdf8', '#22c55e', '#f59e0b', '#ef4444', '#a78bfa', '#f472b6', '#2dd4bf', '#facc15', '#fb923c', '#94a3b8'];
+var PALETA_FILIAIS = ['#38bdf8', '#fb7185', '#4ade80', '#fbbf24', '#a78bfa', '#22d3ee', '#f472b6', '#fb923c', '#818cf8', '#a3e635'];
 new Chart(document.getElementById('chart-despesas-filial-mensal'), {{
   type: 'line',
   data: {{
@@ -2393,15 +2393,20 @@ new Chart(document.getElementById('chart-despesas-filial-mensal'), {{
     datasets: CHART_DATA.despesasFilialMensal.series.map(function(s, i) {{
       return {{
         label: s.filial, data: s.valores, borderColor: PALETA_FILIAIS[i % PALETA_FILIAIS.length],
-        backgroundColor: PALETA_FILIAIS[i % PALETA_FILIAIS.length], tension: 0.25, pointRadius: 3
+        backgroundColor: PALETA_FILIAIS[i % PALETA_FILIAIS.length], borderWidth: 2.5,
+        tension: 0, pointRadius: 3, pointHoverRadius: 6, pointBackgroundColor: '#0f172a', pointBorderWidth: 2
       }};
     }})
   }},
   options: {{
     responsive: true, maintainAspectRatio: false,
+    interaction: {{ mode: 'index', intersect: false }},
     plugins: {{
       legend: {{ position: 'bottom' }},
-      tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.dataset.label + ': ' + brlJs(ctx.parsed.y); }} }} }}
+      tooltip: {{
+        itemSort: function(a, b) {{ return b.parsed.y - a.parsed.y; }},
+        callbacks: {{ label: function(ctx) {{ return ctx.dataset.label + ': ' + brlJs(ctx.parsed.y); }} }}
+      }}
     }},
     scales: {{ y: {{ ticks: {{ callback: function(v) {{ return brlJs(v); }} }} }} }}
   }}
