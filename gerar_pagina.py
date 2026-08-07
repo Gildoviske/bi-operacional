@@ -467,6 +467,79 @@ manutencoes_resumo = {
     "dias_medio": round(sum(dias_manutencoes_validos) / len(dias_manutencoes_validos), 1) if dias_manutencoes_validos else 0,
 }
 
+# -------------------------------------------------------------- DESPESAS
+despesas_mtime = mtime_str("CONTROLE DE DESPESAS.xlsx")
+
+DATA_INICIO_DESPESAS = datetime(2026, 1, 1)
+DATA_FIM_DESPESAS = datetime.now()
+
+
+def _despesa_no_periodo(dt):
+    return hasattr(dt, "timestamp") and DATA_INICIO_DESPESAS <= dt <= DATA_FIM_DESPESAS
+
+
+despesas_itens = []
+
+for r in load_dicts("CONTROLE DE DESPESAS.xlsx", "MATERIAL DE LIMPEZA"):
+    if not r.get("Filial"):
+        continue
+    dt = r.get("Vencimento")
+    if not _despesa_no_periodo(dt):
+        continue
+    despesas_itens.append({
+        "filial": r.get("Filial"), "categoria": "Material de Limpeza",
+        "fornecedor": (r.get("Fornecedor") or "-").strip(), "documento": str(r.get("Título") or "-"),
+        "data": data_str(dt), "data_ts": malote_epoch(dt),
+        "valor": round(r.get("Valor Pago") or 0, 2), "historico": r.get("Histórico") or "-",
+    })
+
+for r in load_dicts("CONTROLE DE DESPESAS.xlsx", "MATERIAL DE ESCRITÓRIO"):
+    if not r.get("Filial"):
+        continue
+    dt = r.get("Vencimento")
+    if not _despesa_no_periodo(dt):
+        continue
+    despesas_itens.append({
+        "filial": r.get("Filial"), "categoria": "Material de Escritório",
+        "fornecedor": (r.get("Fornecedor") or "-").strip(), "documento": str(r.get("Título") or "-"),
+        "data": data_str(dt), "data_ts": malote_epoch(dt),
+        "valor": round(r.get("Valor Pago") or 0, 2), "historico": r.get("Histórico") or "-",
+    })
+
+for r in load_dicts("CONTROLE DE DESPESAS.xlsx", "REGISTRO MANUAL PARCIAL"):
+    if not r.get("Filial"):
+        continue
+    dt = r.get("Data")
+    if not _despesa_no_periodo(dt):
+        continue
+    despesas_itens.append({
+        "filial": r.get("Filial"), "categoria": "Registro Manual Parcial",
+        "fornecedor": (r.get("Operação") or "-").strip(), "documento": str(r.get("Documento") or "-"),
+        "data": data_str(dt), "data_ts": malote_epoch(dt),
+        "valor": round(r.get("Valor") or 0, 2), "historico": r.get("Histórico") or "-",
+    })
+
+despesas_itens.sort(key=lambda x: x["data_ts"], reverse=True)
+
+despesas_por_categoria = {}
+for it in despesas_itens:
+    despesas_por_categoria[it["categoria"]] = despesas_por_categoria.get(it["categoria"], 0) + it["valor"]
+
+despesas_por_filial = {}
+for it in despesas_itens:
+    despesas_por_filial[it["filial"]] = despesas_por_filial.get(it["filial"], 0) + it["valor"]
+despesas_filiais_ordenadas = sorted(despesas_por_filial.items(), key=lambda kv: kv[1], reverse=True)
+
+despesas_resumo = {
+    "total_geral": round(sum(it["valor"] for it in despesas_itens), 2),
+    "total_limpeza": round(despesas_por_categoria.get("Material de Limpeza", 0), 2),
+    "total_escritorio": round(despesas_por_categoria.get("Material de Escritório", 0), 2),
+    "total_manual": round(despesas_por_categoria.get("Registro Manual Parcial", 0), 2),
+    "lancamentos": len(despesas_itens),
+    "filiais": len(despesas_por_filial),
+}
+despesas_json = json.dumps(despesas_itens, ensure_ascii=False)
+
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
 chart_data = {
@@ -543,6 +616,14 @@ chart_data = {
     "manutencoesFilial": {
         "labels": [f[0] for f in manutencoes_filiais_ordenadas],
         "values": [f[1] for f in manutencoes_filiais_ordenadas],
+    },
+    "despesasCategoria": {
+        "labels": ["Material de Limpeza", "Material de Escritório", "Registro Manual Parcial"],
+        "values": [despesas_resumo["total_limpeza"], despesas_resumo["total_escritorio"], despesas_resumo["total_manual"]],
+    },
+    "despesasFilial": {
+        "labels": [f[0] for f in despesas_filiais_ordenadas],
+        "values": [round(f[1], 2) for f in despesas_filiais_ordenadas],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -765,6 +846,46 @@ def secao_devolvidos(mtime, resumo):
   </table>
   </div>
   <div class="pager" id="pager-devolvidos"></div>
+</section>
+"""
+
+
+def secao_despesas(mtime, resumo):
+    return f"""
+<section id="despesas">
+  <h2>💰 Despesas (Material de Limpeza, Escritório e Registros Manuais)</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {mtime} · Período de 01/01/2026 até {datetime.now().strftime('%d/%m/%Y')}</p>
+  <div class="cards">
+    <div class="card ok"><div class="label">Total Geral Pago</div><div class="value">{brl(resumo['total_geral'])}</div></div>
+    <div class="card"><div class="label">Material de Limpeza</div><div class="value">{brl(resumo['total_limpeza'])}</div></div>
+    <div class="card"><div class="label">Material de Escritório</div><div class="value">{brl(resumo['total_escritorio'])}</div></div>
+    <div class="card"><div class="label">Registros Manuais Parciais</div><div class="value">{brl(resumo['total_manual'])}</div></div>
+    <div class="card"><div class="label">Lançamentos</div><div class="value">{resumo['lancamentos']}</div></div>
+    <div class="card"><div class="label">Filiais com despesas</div><div class="value">{resumo['filiais']}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box"><h4>Total por categoria <button class="chart-export-btn" data-chart-export="chart-despesas-categoria" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-despesas-categoria"></canvas></div></div>
+    <div class="chart-box wide"><h4>Total por filial <button class="chart-export-btn" data-chart-export="chart-despesas-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-despesas-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Lançamentos de despesas</h3>
+  <div class="filtros-pedidos">
+    <input class="filtro" id="filtro-despesas" placeholder="Buscar por filial, fornecedor, documento, histórico...">
+    <div class="msel" id="msel-despesas-filial"><button type="button" class="msel-btn" data-default="Todas as filiais">Todas as filiais</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <div class="msel" id="msel-despesas-categoria"><button type="button" class="msel-btn" data-default="Todas as categorias">Todas as categorias</button><div class="msel-panel"><div class="msel-actions"><button type="button" data-act="all">Marcar todos</button><button type="button" data-act="none">Limpar</button></div><div class="msel-options"></div></div></div>
+    <button id="limpar-despesas" type="button">Limpar filtros</button>
+    <button class="table-export-btn" data-export="tbl-despesas">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-despesas">
+    <thead><tr>
+      <th data-col="filial">Filial</th><th data-col="categoria">Categoria</th><th data-col="fornecedor">Fornecedor / Operação</th>
+      <th data-col="documento">Documento</th><th data-col="data">Data</th><th data-col="valor" class="num">Valor</th>
+      <th data-col="historico">Histórico</th>
+    </tr></thead>
+    <tbody id="tbody-despesas"></tbody>
+  </table>
+  </div>
+  <div class="pager" id="pager-despesas"></div>
 </section>
 """
 
@@ -993,6 +1114,7 @@ html = rf"""<!DOCTYPE html>
   <a href="#devia" class="nav-link"><span class="nav-icon">🛡️</span><span class="nav-label">Películas DEVIA</span></a>
   <a href="#upmaster" class="nav-link"><span class="nav-icon">🛡️</span><span class="nav-label">Películas UPMASTER</span></a>
   <a href="#manutencoes" class="nav-link"><span class="nav-icon">🔧</span><span class="nav-label">Manutenções</span></a>
+  <a href="#despesas" class="nav-link"><span class="nav-icon">💰</span><span class="nav-label">Despesas</span></a>
   <a href="#acessorios" class="nav-link"><span class="nav-icon">🎧</span><span class="nav-label">Acessórios</span></a>
   <a href="#acessorios-tim" class="nav-link"><span class="nav-icon">📶</span><span class="nav-label">Fidelizados TIM</span></a>
   <a href="#devolvidos" class="nav-link"><span class="nav-icon">♻️</span><span class="nav-label">Devolvidos e Defeitos</span></a>
@@ -1140,6 +1262,8 @@ html = rf"""<!DOCTYPE html>
 {secao_pelicula("upmaster", "🛡️ Películas UPMASTER por Filial", upmaster, "upmaster")}
 
 {secao_manutencoes(manutencoes_mtime, manutencoes_resumo)}
+
+{secao_despesas(despesas_mtime, despesas_resumo)}
 
 {secao_acessorios("acessorios", "🎧 Acessórios nas Filiais", acessorios_mtime, acessorios_diversos_resumo, "acessorios")}
 {secao_seriais_tim(acessorios_mtime, seriais_resumo)}
@@ -1882,6 +2006,46 @@ criarTabelaPaginada({{
   ]
 }});
 
+// ---- tabela de despesas ----
+function linhaDespesaHtml(r) {{
+  return '<tr><td>' + r.filial + '</td><td>' + r.categoria + '</td><td>' + r.fornecedor + '</td>' +
+    '<td>' + r.documento + '</td><td>' + r.data + '</td><td class="num">' + brlJs(r.valor) + '</td>' +
+    '<td>' + r.historico + '</td></tr>';
+}}
+
+var DESPESAS_COLS = {{
+  filial: function(r) {{ return r.filial.toLowerCase(); }},
+  categoria: function(r) {{ return r.categoria.toLowerCase(); }},
+  fornecedor: function(r) {{ return r.fornecedor.toLowerCase(); }},
+  documento: function(r) {{ return r.documento.toLowerCase(); }},
+  data: function(r) {{ return r.data_ts; }},
+  valor: function(r) {{ return r.valor; }},
+  historico: function(r) {{ return r.historico.toLowerCase(); }}
+}};
+
+function buscaDespesa(r) {{ return r.filial + ' ' + r.fornecedor + ' ' + r.documento + ' ' + r.historico; }}
+
+criarTabelaPaginada({{
+  dados: {despesas_json},
+  pageSize: 50, sortInicial: 'data',
+  tbodyId: 'tbody-despesas', pagerId: 'pager-despesas', tableId: 'tbl-despesas',
+  buscaId: 'filtro-despesas', limparId: 'limpar-despesas',
+  colunas: DESPESAS_COLS, linhaHtml: linhaDespesaHtml, busca: buscaDespesa,
+  filtros: [
+    {{ id: 'despesas-filial', campo: 'filial' }},
+    {{ id: 'despesas-categoria', campo: 'categoria' }}
+  ],
+  colunasExport: [
+    {{ label: 'Filial', get: function(r) {{ return r.filial; }} }},
+    {{ label: 'Categoria', get: function(r) {{ return r.categoria; }} }},
+    {{ label: 'Fornecedor / Operação', get: function(r) {{ return r.fornecedor; }} }},
+    {{ label: 'Documento', get: function(r) {{ return r.documento; }} }},
+    {{ label: 'Data', get: function(r) {{ return r.data; }} }},
+    {{ label: 'Valor', get: function(r) {{ return r.valor; }} }},
+    {{ label: 'Histórico', get: function(r) {{ return r.historico; }} }}
+  ]
+}});
+
 const CHART_DATA = {chart_data_json};
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.borderColor = '#334155';
@@ -2077,6 +2241,36 @@ new Chart(document.getElementById('chart-manutencoes-filial'), {{
     datasets: [{{ label: 'Chamados', data: CHART_DATA.manutencoesFilial.values, backgroundColor: COR_ACCENT }}]
   }},
   options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+}});
+
+new Chart(document.getElementById('chart-despesas-categoria'), {{
+  type: 'doughnut',
+  data: {{
+    labels: CHART_DATA.despesasCategoria.labels,
+    datasets: [{{ data: CHART_DATA.despesasCategoria.values, backgroundColor: [COR_ACCENT, COR_WARN, COR_OK] }}]
+  }},
+  options: {{
+    responsive: true, maintainAspectRatio: false,
+    plugins: {{
+      legend: {{ position: 'bottom' }},
+      tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.label + ': ' + brlJs(ctx.parsed); }} }} }}
+    }}
+  }}
+}});
+
+new Chart(document.getElementById('chart-despesas-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.despesasFilial.labels,
+    datasets: [{{ label: 'Total pago', data: CHART_DATA.despesasFilial.values, backgroundColor: COR_ACCENT }}]
+  }},
+  options: {{
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: {{
+      legend: {{ display: false }},
+      tooltip: {{ callbacks: {{ label: function(ctx) {{ return brlJs(ctx.parsed.x); }} }} }}
+    }}
+  }}
 }});
 </script>
 </body>
