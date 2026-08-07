@@ -2319,6 +2319,29 @@ new Chart(document.getElementById('chart-despesas-filial'), {{
   }}
 }});
 
+var totalNoTopoPlugin = {{
+  id: 'totalNoTopo',
+  afterDatasetsDraw: function(chart) {{
+    var ctx = chart.ctx;
+    var meta0 = chart.getDatasetMeta(0);
+    ctx.save();
+    ctx.font = 'bold 12px Segoe UI, Arial, sans-serif';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    chart.data.labels.forEach(function(label, i) {{
+      var total = 0;
+      chart.data.datasets.forEach(function(ds) {{ total += ds.data[i] || 0; }});
+      var bar = meta0.data[i];
+      var yScale = chart.scales.y;
+      var xPos = bar.x;
+      var yPos = yScale.getPixelForValue(total);
+      ctx.fillText(brlJs(total), xPos, yPos - 6);
+    }});
+    ctx.restore();
+  }}
+}};
+
 new Chart(document.getElementById('chart-despesas-mensal'), {{
   type: 'bar',
   data: {{
@@ -2329,9 +2352,11 @@ new Chart(document.getElementById('chart-despesas-mensal'), {{
       {{ label: 'Registro Manual', data: CHART_DATA.despesasMensal.manual, backgroundColor: COR_OK }}
     ]
   }},
+  plugins: [totalNoTopoPlugin],
   options: {{
     responsive: true, maintainAspectRatio: false,
-    scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }},
+    layout: {{ padding: {{ top: 24 }} }},
+    scales: {{ x: {{ stacked: true }}, y: {{ stacked: true, grace: '10%' }} }},
     plugins: {{
       legend: {{ position: 'bottom' }},
       tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.dataset.label + ': ' + brlJs(ctx.parsed.y); }} }} }}
