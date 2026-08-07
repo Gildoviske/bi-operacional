@@ -539,6 +539,22 @@ MESES_PT = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "
 despesas_meses_ordenados = sorted(despesas_por_mes.keys())
 despesas_meses_labels = [f"{MESES_PT[int(m.split('-')[1])]}/{m.split('-')[0]}" for m in despesas_meses_ordenados]
 
+despesas_por_filial_mes = {}
+for it in despesas_itens:
+    chave = datetime.fromtimestamp(it["data_ts"] / 1000).strftime("%Y-%m")
+    bucket = despesas_por_filial_mes.setdefault(it["filial"], {})
+    bucket[chave] = bucket.get(chave, 0) + it["valor"]
+
+TOP_N_FILIAIS_DESPESAS = 10
+despesas_top_filiais = [f[0] for f in despesas_filiais_ordenadas[:TOP_N_FILIAIS_DESPESAS]]
+despesas_filial_mensal_series = [
+    {
+        "filial": filial,
+        "valores": [round(despesas_por_filial_mes.get(filial, {}).get(m, 0), 2) for m in despesas_meses_ordenados],
+    }
+    for filial in despesas_top_filiais
+]
+
 despesas_resumo = {
     "total_geral": round(sum(it["valor"] for it in despesas_itens), 2),
     "total_limpeza": round(despesas_por_categoria.get("Material de Limpeza", 0), 2),
@@ -639,6 +655,10 @@ chart_data = {
         "limpeza": [round(despesas_por_mes[m]["Material de Limpeza"], 2) for m in despesas_meses_ordenados],
         "escritorio": [round(despesas_por_mes[m]["Material de Escritório"], 2) for m in despesas_meses_ordenados],
         "manual": [round(despesas_por_mes[m]["Registro Manual"], 2) for m in despesas_meses_ordenados],
+    },
+    "despesasFilialMensal": {
+        "labels": despesas_meses_labels,
+        "series": despesas_filial_mensal_series,
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -882,6 +902,7 @@ def secao_despesas(mtime, resumo):
     <div class="chart-box"><h4>Total por categoria <button class="chart-export-btn" data-chart-export="chart-despesas-categoria" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-despesas-categoria"></canvas></div></div>
     <div class="chart-box wide"><h4>Total por filial <button class="chart-export-btn" data-chart-export="chart-despesas-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-despesas-filial"></canvas></div></div>
     <div class="chart-box wide"><h4>Total por mês <button class="chart-export-btn" data-chart-export="chart-despesas-mensal" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-despesas-mensal"></canvas></div></div>
+    <div class="chart-box wide"><h4>Comparativo das top 10 filiais por mês <button class="chart-export-btn" data-chart-export="chart-despesas-filial-mensal" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-despesas-filial-mensal"></canvas></div></div>
   </div>
   <h3>📋 Lançamentos de despesas</h3>
   <div class="filtros-pedidos">
@@ -2361,6 +2382,28 @@ new Chart(document.getElementById('chart-despesas-mensal'), {{
       legend: {{ position: 'bottom' }},
       tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.dataset.label + ': ' + brlJs(ctx.parsed.y); }} }} }}
     }}
+  }}
+}});
+
+var PALETA_FILIAIS = ['#38bdf8', '#22c55e', '#f59e0b', '#ef4444', '#a78bfa', '#f472b6', '#2dd4bf', '#facc15', '#fb923c', '#94a3b8'];
+new Chart(document.getElementById('chart-despesas-filial-mensal'), {{
+  type: 'line',
+  data: {{
+    labels: CHART_DATA.despesasFilialMensal.labels,
+    datasets: CHART_DATA.despesasFilialMensal.series.map(function(s, i) {{
+      return {{
+        label: s.filial, data: s.valores, borderColor: PALETA_FILIAIS[i % PALETA_FILIAIS.length],
+        backgroundColor: PALETA_FILIAIS[i % PALETA_FILIAIS.length], tension: 0.25, pointRadius: 3
+      }};
+    }})
+  }},
+  options: {{
+    responsive: true, maintainAspectRatio: false,
+    plugins: {{
+      legend: {{ position: 'bottom' }},
+      tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.dataset.label + ': ' + brlJs(ctx.parsed.y); }} }} }}
+    }},
+    scales: {{ y: {{ ticks: {{ callback: function(v) {{ return brlJs(v); }} }} }} }}
   }}
 }});
 </script>
