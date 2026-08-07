@@ -506,14 +506,14 @@ for r in load_dicts("CONTROLE DE DESPESAS.xlsx", "MATERIAL DE ESCRITÓRIO"):
         "valor": round(r.get("Valor Pago") or 0, 2), "historico": r.get("Histórico") or "-",
     })
 
-for r in load_dicts("CONTROLE DE DESPESAS.xlsx", "REGISTRO MANUAL PARCIAL"):
-    if not r.get("Filial"):
+for r in load_dicts("CONTROLE DE DESPESAS.xlsx", "REGISTRO MANUAL TOTAL"):
+    if not r.get("Loja"):
         continue
     dt = r.get("Data")
     if not _despesa_no_periodo(dt):
         continue
     despesas_itens.append({
-        "filial": r.get("Filial"), "categoria": "Registro Manual Parcial",
+        "filial": r.get("Loja"), "categoria": "Registro Manual",
         "fornecedor": (r.get("Operação") or "-").strip(), "documento": str(r.get("Documento") or "-"),
         "data": data_str(dt), "data_ts": malote_epoch(dt),
         "valor": round(r.get("Valor") or 0, 2), "historico": r.get("Histórico") or "-",
@@ -534,7 +534,7 @@ despesas_resumo = {
     "total_geral": round(sum(it["valor"] for it in despesas_itens), 2),
     "total_limpeza": round(despesas_por_categoria.get("Material de Limpeza", 0), 2),
     "total_escritorio": round(despesas_por_categoria.get("Material de Escritório", 0), 2),
-    "total_manual": round(despesas_por_categoria.get("Registro Manual Parcial", 0), 2),
+    "total_manual": round(despesas_por_categoria.get("Registro Manual", 0), 2),
     "lancamentos": len(despesas_itens),
     "filiais": len(despesas_por_filial),
 }
@@ -618,7 +618,7 @@ chart_data = {
         "values": [f[1] for f in manutencoes_filiais_ordenadas],
     },
     "despesasCategoria": {
-        "labels": ["Material de Limpeza", "Material de Escritório", "Registro Manual Parcial"],
+        "labels": ["Material de Limpeza", "Material de Escritório", "Registro Manual"],
         "values": [despesas_resumo["total_limpeza"], despesas_resumo["total_escritorio"], despesas_resumo["total_manual"]],
     },
     "despesasFilial": {
@@ -859,7 +859,7 @@ def secao_despesas(mtime, resumo):
     <div class="card ok"><div class="label">Total Geral Pago</div><div class="value">{brl(resumo['total_geral'])}</div></div>
     <div class="card"><div class="label">Material de Limpeza</div><div class="value">{brl(resumo['total_limpeza'])}</div></div>
     <div class="card"><div class="label">Material de Escritório</div><div class="value">{brl(resumo['total_escritorio'])}</div></div>
-    <div class="card"><div class="label">Registros Manuais Parciais</div><div class="value">{brl(resumo['total_manual'])}</div></div>
+    <div class="card"><div class="label">Registro Manual</div><div class="value">{brl(resumo['total_manual'])}</div></div>
     <div class="card"><div class="label">Lançamentos</div><div class="value">{resumo['lancamentos']}</div></div>
     <div class="card"><div class="label">Filiais com despesas</div><div class="value">{resumo['filiais']}</div></div>
   </div>
