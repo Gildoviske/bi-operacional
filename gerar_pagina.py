@@ -6,6 +6,8 @@ Lê os 3 arquivos em "I:\\Meu Drive\\CONTROLE COMPRAS" e grava index.html
 nesta mesma pasta (bi-web), pronta para publicar no GitHub Pages.
 """
 import json
+import re
+import unicodedata
 import openpyxl
 from datetime import datetime
 from pathlib import Path
@@ -259,7 +261,8 @@ def montar_acessorios(rows):
     for r in rows:
         filial = r.get("Filial") or ""
         saldo = r.get("Saldo") or 0
-        valor = r.get("VALOR DE VENDA") or 0
+        valor = r.get("VALOR DE VENDA")
+        valor = valor if isinstance(valor, (int, float)) else 0
         itens.append({
             "filial": filial, "ref": r.get("Produto") or "", "desc": r.get("Descrição") or "",
             "subgrupo": r.get("Sub Grupo Estoque") or "-", "fabricante": r.get("Fabricante") or "-",
@@ -565,6 +568,110 @@ despesas_resumo = {
 }
 despesas_json = json.dumps(despesas_itens, ensure_ascii=False)
 
+# -------------------------------------------------------------- CAMPANHAS
+campanhas_mtime = mtime_str("CONTROLE DE CAMPANHAS.xlsx")
+
+# nomes que aparecem diferentes entre a aba de orçamento e a de lançamentos
+ALIAS_FILIAL_CAMPANHAS = {
+    "SANTA BARBARA TIVOLI": "SHOPPING TIVOLI",
+    "VALINHOS SHOPPING": "VALINHOS",
+    "LIMEIRA SHOPPING": "PATIO LIMEIRA",
+}
+
+
+def normalizar_filial_campanhas(nome):
+    if not nome:
+        return ""
+    s = unicodedata.normalize("NFKD", str(nome)).encode("ascii", "ignore").decode("ascii")
+    s = s.strip().upper()
+    return ALIAS_FILIAL_CAMPANHAS.get(s, s)
+
+
+def extrair_area(area_str):
+    m = re.match(r"[ÁA]REA\s*-?\s*(\d+)\s*(?:\(([^)]+)\))?", (area_str or "").strip(), re.IGNORECASE)
+    if m:
+        return m.group(1), (m.group(2) or "").strip().title()
+    return "-", ""
+
+
+campanhas_orcamento = []
+_area_num, _area_coord = "-", ""
+_vistos_orcamento = set()
+for r in load_dicts("CONTROLE DE CAMPANHAS.xlsx", "Planilha2"):
+    filial_raw = r.get("FILIAL")
+    if not filial_raw:
+        continue
+    if r.get("ÁREA"):
+        _area_num, _area_coord = extrair_area(r.get("ÁREA"))
+    filial = normalizar_filial_campanhas(filial_raw)
+    if filial in _vistos_orcamento:
+        continue
+    _vistos_orcamento.add(filial)
+    campanhas_orcamento.append({
+        "filial": filial, "area_num": _area_num, "coordenador": _area_coord,
+        "verba": r.get("DINHEIRO PARA CAMPANHA") or 0,
+    })
+
+AREA_COORDENADOR = {o["area_num"]: o["coordenador"] for o in campanhas_orcamento if o["coordenador"]}
+
+campanhas_lancamentos = []
+for r in load_dicts("CONTROLE DE CAMPANHAS.xlsx", "Planilha1"):
+    loja = r.get("Loja")
+    if not loja:
+        continue
+    dt = r.get("Data")
+    area_num, _ = extrair_area(r.get("ÁREA"))
+    campanhas_lancamentos.append({
+        "filial": normalizar_filial_campanhas(loja), "area_num": area_num,
+        "data": data_str(dt), "data_ts": malote_epoch(dt),
+        "documento": str(r.get("Documento") or "-"),
+        "valor": round(r.get("Valor") or 0, 2), "historico": r.get("Histórico") or "-",
+    })
+campanhas_lancamentos.sort(key=lambda x: x["data_ts"], reverse=True)
+
+campanhas_gasto_por_filial = {}
+for it in campanhas_lancamentos:
+    campanhas_gasto_por_filial[it["filial"]] = campanhas_gasto_por_filial.get(it["filial"], 0) + it["valor"]
+
+campanhas_filiais = []
+for o in campanhas_orcamento:
+    verba = o["verba"] or 0
+    gasto = round(campanhas_gasto_por_filial.get(o["filial"], 0), 2)
+    saldo = round(verba - gasto, 2)
+    pct_usado = round((gasto / verba * 100), 1) if verba else 0
+    if pct_usado >= 90:
+        pct_cls = "bad"
+    elif pct_usado >= 60:
+        pct_cls = "warn"
+    else:
+        pct_cls = "ok"
+    coord = AREA_COORDENADOR.get(o["area_num"], "")
+    campanhas_filiais.append({
+        "filial": o["filial"], "area": f"Área {o['area_num']}" + (f" ({coord})" if coord else ""),
+        "area_num": o["area_num"], "verba": verba, "gasto": gasto, "saldo": saldo,
+        "pct_usado": pct_usado, "pct_cls": pct_cls,
+    })
+campanhas_filiais.sort(key=lambda f: f["pct_usado"], reverse=True)
+
+campanhas_por_area = {}
+for f in campanhas_filiais:
+    b = campanhas_por_area.setdefault(f["area_num"], {"verba": 0, "gasto": 0, "coordenador": AREA_COORDENADOR.get(f["area_num"], "")})
+    b["verba"] += f["verba"]
+    b["gasto"] += f["gasto"]
+campanhas_areas_ordenadas = sorted(campanhas_por_area.items(), key=lambda kv: kv[0])
+
+campanhas_resumo = {
+    "verba_total": round(sum(f["verba"] for f in campanhas_filiais), 2),
+    "gasto_total": round(sum(f["gasto"] for f in campanhas_filiais), 2),
+    "saldo_total": round(sum(f["saldo"] for f in campanhas_filiais), 2),
+    "lancamentos": len(campanhas_lancamentos),
+    "filiais_com_gasto": len(campanhas_gasto_por_filial),
+    "filiais": len(campanhas_filiais),
+}
+campanhas_resumo["pct_usado"] = round(
+    (campanhas_resumo["gasto_total"] / campanhas_resumo["verba_total"] * 100), 1
+) if campanhas_resumo["verba_total"] else 0
+
 gerado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
 
 chart_data = {
@@ -659,6 +766,16 @@ chart_data = {
     "despesasFilialMensal": {
         "labels": despesas_meses_labels,
         "series": despesas_filial_mensal_series,
+    },
+    "campanhasArea": {
+        "labels": [f"Área {num}" + (f" ({b['coordenador']})" if b["coordenador"] else "") for num, b in campanhas_areas_ordenadas],
+        "verba": [round(b["verba"], 2) for _, b in campanhas_areas_ordenadas],
+        "gasto": [round(b["gasto"], 2) for _, b in campanhas_areas_ordenadas],
+    },
+    "campanhasFilial": {
+        "labels": [f["filial"] for f in campanhas_filiais],
+        "verba": [f["verba"] for f in campanhas_filiais],
+        "gasto": [f["gasto"] for f in campanhas_filiais],
     },
 }
 chart_data_json = json.dumps(chart_data, ensure_ascii=False)
@@ -929,6 +1046,80 @@ def secao_despesas(mtime, resumo):
 """
 
 
+def linhas_campanhas_filiais():
+    out = []
+    for f in campanhas_filiais:
+        out.append(
+            "<tr><td>{fil}</td><td>{area}</td><td class='num'>{verba}</td><td class='num'>{gasto}</td>"
+            "<td class='num'>{saldo}</td><td><span class='pill {cls}'>{pct}%</span></td></tr>".format(
+                fil=f["filial"], area=f["area"], verba=brl(f["verba"]), gasto=brl(f["gasto"]),
+                saldo=brl(f["saldo"]), cls=f["pct_cls"], pct=f["pct_usado"]
+            )
+        )
+    return "\n".join(out)
+
+
+def linhas_campanhas_lancamentos():
+    out = []
+    for it in campanhas_lancamentos:
+        out.append(
+            "<tr><td>{fil}</td><td>Área {area}</td><td>{data}</td><td>{doc}</td>"
+            "<td class='num'>{valor}</td><td>{hist}</td></tr>".format(
+                fil=it["filial"], area=it["area_num"], data=it["data"], doc=it["documento"],
+                valor=brl(it["valor"]), hist=it["historico"]
+            )
+        )
+    return "\n".join(out)
+
+
+def secao_campanhas(mtime, resumo):
+    return f"""
+<section id="campanhas">
+  <h2>📣 Campanhas / Verba de Área</h2>
+  <p class="secao-mtime">🕒 Planilha atualizada em {mtime}</p>
+  <div class="cards">
+    <div class="card"><div class="label">Verba Total (mensal)</div><div class="value">{brl(resumo['verba_total'])}</div></div>
+    <div class="card warn"><div class="label">Total Gasto</div><div class="value">{brl(resumo['gasto_total'])}</div></div>
+    <div class="card ok"><div class="label">Saldo Disponível</div><div class="value">{brl(resumo['saldo_total'])}</div></div>
+    <div class="card"><div class="label">% da Verba Utilizada</div><div class="value">{resumo['pct_usado']}%</div></div>
+    <div class="card"><div class="label">Lançamentos</div><div class="value">{resumo['lancamentos']}</div></div>
+    <div class="card"><div class="label">Filiais que já usaram verba</div><div class="value">{resumo['filiais_com_gasto']} de {resumo['filiais']}</div></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box wide"><h4>Verba x Gasto por área <button class="chart-export-btn" data-chart-export="chart-campanhas-area" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-campanhas-area"></canvas></div></div>
+    <div class="chart-box wide"><h4>Verba x Gasto por filial <button class="chart-export-btn" data-chart-export="chart-campanhas-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-campanhas-filial"></canvas></div></div>
+  </div>
+  <h3>📋 Verba por filial</h3>
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-campanhas-filiais" placeholder="Filtrar por filial ou área...">
+    <button class="table-export-btn" data-export="tbl-campanhas-filiais">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-campanhas-filiais" class="sortable">
+    <thead><tr><th>Filial</th><th>Área</th><th class="num">Verba Mensal</th><th class="num">Gasto</th><th class="num">Saldo</th><th class="num">% Utilizado</th></tr></thead>
+    <tbody>
+    {linhas_campanhas_filiais()}
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="margin-top:32px;">📋 Lançamentos de campanhas</h3>
+  <div class="table-toolbar">
+    <input class="filtro" data-target="tbl-campanhas-log" placeholder="Filtrar por filial, documento ou histórico...">
+    <button class="table-export-btn" data-export="tbl-campanhas-log">📥 Exportar Excel</button>
+  </div>
+  <div class="table-wrap">
+  <table id="tbl-campanhas-log" class="sortable">
+    <thead><tr><th>Filial</th><th>Área</th><th>Data</th><th>Documento</th><th class="num">Valor</th><th>Histórico</th></tr></thead>
+    <tbody>
+    {linhas_campanhas_lancamentos()}
+    </tbody>
+  </table>
+  </div>
+</section>
+"""
+
+
 def linhas_malotes():
     out = []
     for f in malotes_filiais:
@@ -1156,6 +1347,7 @@ html = rf"""<!DOCTYPE html>
   <a href="#upmaster" class="nav-link"><span class="nav-icon">🛡️</span><span class="nav-label">Películas UPMASTER</span></a>
   <a href="#manutencoes" class="nav-link"><span class="nav-icon">🔧</span><span class="nav-label">Manutenções</span></a>
   <a href="#despesas" class="nav-link"><span class="nav-icon">💰</span><span class="nav-label">Despesas</span></a>
+  <a href="#campanhas" class="nav-link"><span class="nav-icon">📣</span><span class="nav-label">Campanhas</span></a>
   <a href="#acessorios" class="nav-link"><span class="nav-icon">🎧</span><span class="nav-label">Acessórios</span></a>
   <a href="#acessorios-tim" class="nav-link"><span class="nav-icon">📶</span><span class="nav-label">Fidelizados TIM</span></a>
   <a href="#devolvidos" class="nav-link"><span class="nav-icon">♻️</span><span class="nav-label">Devolvidos e Defeitos</span></a>
@@ -1305,6 +1497,8 @@ html = rf"""<!DOCTYPE html>
 {secao_manutencoes(manutencoes_mtime, manutencoes_resumo)}
 
 {secao_despesas(despesas_mtime, despesas_resumo)}
+
+{secao_campanhas(campanhas_mtime, campanhas_resumo)}
 
 {secao_acessorios("acessorios", "🎧 Acessórios nas Filiais", acessorios_mtime, acessorios_diversos_resumo, "acessorios")}
 {secao_seriais_tim(acessorios_mtime, seriais_resumo)}
@@ -1516,7 +1710,7 @@ document.addEventListener('click', function(e) {{
   }}
 }});
 
-['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-devia', 'tbl-upmaster', 'tbl-transf', 'tbl-malotes-filial', 'tbl-manutencoes'].forEach(registrarExportDOM);
+['tbl-pedidos-filial', 'tbl-notas', 'tbl-amet', 'tbl-devia', 'tbl-upmaster', 'tbl-transf', 'tbl-malotes-filial', 'tbl-manutencoes', 'tbl-campanhas-filiais', 'tbl-campanhas-log'].forEach(registrarExportDOM);
 
 // ---- fabrica generica de tabela paginada com busca + multi-selecao, usada pelas tabelas de acessorios ----
 function criarTabelaPaginada(opts) {{
@@ -2409,6 +2603,44 @@ new Chart(document.getElementById('chart-despesas-filial-mensal'), {{
       }}
     }},
     scales: {{ y: {{ ticks: {{ callback: function(v) {{ return brlJs(v); }} }} }} }}
+  }}
+}});
+
+new Chart(document.getElementById('chart-campanhas-area'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.campanhasArea.labels,
+    datasets: [
+      {{ label: 'Verba', data: CHART_DATA.campanhasArea.verba, backgroundColor: COR_ACCENT }},
+      {{ label: 'Gasto', data: CHART_DATA.campanhasArea.gasto, backgroundColor: COR_WARN }}
+    ]
+  }},
+  options: {{
+    responsive: true, maintainAspectRatio: false,
+    plugins: {{
+      legend: {{ position: 'bottom' }},
+      tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.dataset.label + ': ' + brlJs(ctx.parsed.y); }} }} }}
+    }},
+    scales: {{ y: {{ ticks: {{ callback: function(v) {{ return brlJs(v); }} }} }} }}
+  }}
+}});
+
+new Chart(document.getElementById('chart-campanhas-filial'), {{
+  type: 'bar',
+  data: {{
+    labels: CHART_DATA.campanhasFilial.labels,
+    datasets: [
+      {{ label: 'Verba', data: CHART_DATA.campanhasFilial.verba, backgroundColor: COR_ACCENT }},
+      {{ label: 'Gasto', data: CHART_DATA.campanhasFilial.gasto, backgroundColor: COR_WARN }}
+    ]
+  }},
+  options: {{
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: {{
+      legend: {{ position: 'bottom' }},
+      tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.dataset.label + ': ' + brlJs(ctx.parsed.x); }} }} }}
+    }},
+    scales: {{ x: {{ ticks: {{ callback: function(v) {{ return brlJs(v); }} }} }} }}
   }}
 }});
 </script>
