@@ -2312,6 +2312,15 @@ Chart.defaults.color = '#94a3b8';
 Chart.defaults.borderColor = '#334155';
 const COR_OK = '#22c55e', COR_WARN = '#f59e0b', COR_BAD = '#ef4444', COR_ACCENT = '#38bdf8';
 
+// gráficos de barra horizontal com uma categoria por filial escondiam rótulos quando
+// não cabiam todos na altura fixa (só apareciam no hover) — aqui a altura vira proporcional
+// ao número de filiais e o eixo de categorias nunca pula rótulo (autoSkip: false)
+function prepararGraficoPorCategoria(canvasId, n) {{
+  var canvas = document.getElementById(canvasId);
+  var box = canvas.closest('.chart-box');
+  box.style.height = Math.max(320, n * 24 + 60) + 'px';
+}}
+
 new Chart(document.getElementById('chart-pedidos-status'), {{
   type: 'doughnut',
   data: {{
@@ -2330,6 +2339,7 @@ new Chart(document.getElementById('chart-pedidos-entrada'), {{
   options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
 }});
 
+prepararGraficoPorCategoria('chart-pedidos-filial', CHART_DATA.pedidosFilial.labels.length);
 new Chart(document.getElementById('chart-pedidos-filial'), {{
   type: 'bar',
   data: {{
@@ -2344,7 +2354,7 @@ new Chart(document.getElementById('chart-pedidos-filial'), {{
     indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
-    scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }},
+    scales: {{ x: {{ stacked: true }}, y: {{ stacked: true, ticks: {{ autoSkip: false }} }} }},
     plugins: {{ legend: {{ position: 'bottom' }} }}
   }}
 }});
@@ -2376,6 +2386,7 @@ new Chart(document.getElementById('chart-transf-prazo'), {{
   options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
 }});
 
+prepararGraficoPorCategoria('chart-amet-filial', CHART_DATA.amet.labels.length);
 new Chart(document.getElementById('chart-amet-filial'), {{
   type: 'bar',
   data: {{
@@ -2389,10 +2400,12 @@ new Chart(document.getElementById('chart-amet-filial'), {{
     indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
-    plugins: {{ legend: {{ position: 'bottom' }} }}
+    plugins: {{ legend: {{ position: 'bottom' }} }},
+    scales: {{ y: {{ ticks: {{ autoSkip: false }} }} }}
   }}
 }});
 
+prepararGraficoPorCategoria('chart-devia-filial', CHART_DATA.devia.labels.length);
 new Chart(document.getElementById('chart-devia-filial'), {{
   type: 'bar',
   data: {{
@@ -2406,10 +2419,12 @@ new Chart(document.getElementById('chart-devia-filial'), {{
     indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
-    plugins: {{ legend: {{ position: 'bottom' }} }}
+    plugins: {{ legend: {{ position: 'bottom' }} }},
+    scales: {{ y: {{ ticks: {{ autoSkip: false }} }} }}
   }}
 }});
 
+prepararGraficoPorCategoria('chart-upmaster-filial', CHART_DATA.upmaster.labels.length);
 new Chart(document.getElementById('chart-upmaster-filial'), {{
   type: 'bar',
   data: {{
@@ -2423,28 +2438,38 @@ new Chart(document.getElementById('chart-upmaster-filial'), {{
     indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
-    plugins: {{ legend: {{ position: 'bottom' }} }}
+    plugins: {{ legend: {{ position: 'bottom' }} }},
+    scales: {{ y: {{ ticks: {{ autoSkip: false }} }} }}
   }}
 }});
 
+prepararGraficoPorCategoria('chart-acessorios-filial', CHART_DATA.acessoriosDiversos.labels.length);
 new Chart(document.getElementById('chart-acessorios-filial'), {{
   type: 'bar',
   data: {{
     labels: CHART_DATA.acessoriosDiversos.labels,
     datasets: [{{ label: 'Saldo', data: CHART_DATA.acessoriosDiversos.saldo, backgroundColor: COR_ACCENT }}]
   }},
-  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+  options: {{
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }},
+    scales: {{ y: {{ ticks: {{ autoSkip: false }} }} }}
+  }}
 }});
 
+prepararGraficoPorCategoria('chart-acessorios-tim-filial', CHART_DATA.acessoriosTim.labels.length);
 new Chart(document.getElementById('chart-acessorios-tim-filial'), {{
   type: 'bar',
   data: {{
     labels: CHART_DATA.acessoriosTim.labels,
     datasets: [{{ label: 'Saldo', data: CHART_DATA.acessoriosTim.saldo, backgroundColor: COR_OK }}]
   }},
-  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+  options: {{
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }},
+    scales: {{ y: {{ ticks: {{ autoSkip: false }} }} }}
+  }}
 }});
 
+prepararGraficoPorCategoria('chart-devolvidos-filial', CHART_DATA.devolvidos.labels.length);
 new Chart(document.getElementById('chart-devolvidos-filial'), {{
   type: 'bar',
   data: {{
@@ -2453,7 +2478,10 @@ new Chart(document.getElementById('chart-devolvidos-filial'), {{
   }},
   options: {{
     indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }},
-    scales: {{ x: {{ type: 'logarithmic', title: {{ display: true, text: 'Saldo (escala logarítmica — um chip com milhares de unidades em Estoque Matriz dominaria a escala linear)', color: '#94a3b8', font: {{ size: 10 }} }} }} }}
+    scales: {{
+      x: {{ type: 'logarithmic', title: {{ display: true, text: 'Saldo (escala logarítmica — um chip com milhares de unidades em Estoque Matriz dominaria a escala linear)', color: '#94a3b8', font: {{ size: 10 }} }} }},
+      y: {{ ticks: {{ autoSkip: false }} }}
+    }}
   }}
 }});
 
@@ -2470,6 +2498,7 @@ new Chart(document.getElementById('chart-malotes-status-adm'), {{
   options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
 }});
 
+prepararGraficoPorCategoria('chart-malotes-filial', CHART_DATA.malotesFilial.labels.length);
 new Chart(document.getElementById('chart-malotes-filial'), {{
   type: 'bar',
   data: {{
@@ -2479,7 +2508,7 @@ new Chart(document.getElementById('chart-malotes-filial'), {{
       {{ label: 'No ADM', data: CHART_DATA.malotesFilial.no_adm, backgroundColor: COR_OK }}
     ]
   }},
-  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }}, plugins: {{ legend: {{ position: 'bottom' }} }} }}
+  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: {{ x: {{ stacked: true }}, y: {{ stacked: true, ticks: {{ autoSkip: false }} }} }}, plugins: {{ legend: {{ position: 'bottom' }} }} }}
 }});
 
 var CORES_STATUS_MANUTENCOES = {{ 'PENDENTE': COR_WARN, 'EM ANDAMENTO': COR_WARN, 'CONCLUÍDO': COR_OK, 'CONCLUIDO': COR_OK, 'CONCLUÍDA': COR_OK, 'CONCLUIDA': COR_OK, 'CANCELADO': COR_BAD, 'CANCELADA': COR_BAD }};
@@ -2495,13 +2524,17 @@ new Chart(document.getElementById('chart-manutencoes-status'), {{
   options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }} }} }}
 }});
 
+prepararGraficoPorCategoria('chart-manutencoes-filial', CHART_DATA.manutencoesFilial.labels.length);
 new Chart(document.getElementById('chart-manutencoes-filial'), {{
   type: 'bar',
   data: {{
     labels: CHART_DATA.manutencoesFilial.labels,
     datasets: [{{ label: 'Chamados', data: CHART_DATA.manutencoesFilial.values, backgroundColor: COR_ACCENT }}]
   }},
-  options: {{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
+  options: {{
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }},
+    scales: {{ y: {{ ticks: {{ autoSkip: false }} }} }}
+  }}
 }});
 
 new Chart(document.getElementById('chart-despesas-categoria'), {{
@@ -2519,6 +2552,7 @@ new Chart(document.getElementById('chart-despesas-categoria'), {{
   }}
 }});
 
+prepararGraficoPorCategoria('chart-despesas-filial', CHART_DATA.despesasFilial.labels.length);
 new Chart(document.getElementById('chart-despesas-filial'), {{
   type: 'bar',
   data: {{
@@ -2530,7 +2564,8 @@ new Chart(document.getElementById('chart-despesas-filial'), {{
     plugins: {{
       legend: {{ display: false }},
       tooltip: {{ callbacks: {{ label: function(ctx) {{ return brlJs(ctx.parsed.x); }} }} }}
-    }}
+    }},
+    scales: {{ y: {{ ticks: {{ autoSkip: false }} }} }}
   }}
 }});
 
@@ -2625,6 +2660,7 @@ new Chart(document.getElementById('chart-campanhas-area'), {{
   }}
 }});
 
+prepararGraficoPorCategoria('chart-campanhas-filial', CHART_DATA.campanhasFilial.labels.length);
 new Chart(document.getElementById('chart-campanhas-filial'), {{
   type: 'bar',
   data: {{
@@ -2640,7 +2676,10 @@ new Chart(document.getElementById('chart-campanhas-filial'), {{
       legend: {{ position: 'bottom' }},
       tooltip: {{ callbacks: {{ label: function(ctx) {{ return ctx.dataset.label + ': ' + brlJs(ctx.parsed.x); }} }} }}
     }},
-    scales: {{ x: {{ ticks: {{ callback: function(v) {{ return brlJs(v); }} }} }} }}
+    scales: {{
+      x: {{ ticks: {{ callback: function(v) {{ return brlJs(v); }} }} }},
+      y: {{ ticks: {{ autoSkip: false }} }}
+    }}
   }}
 }});
 </script>
