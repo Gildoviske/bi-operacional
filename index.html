@@ -125,7 +125,7 @@
   </div>
   <div class="badge-atualizacao">
     <div class="data">🕒 Atualizado em 18/08/2026</div>
-    <div class="gerado">Página gerada em 19/08/2026 11:17</div>
+    <div class="gerado">Página gerada em 19/08/2026 11:23</div>
   </div>
 </header>
 <main>
@@ -601,7 +601,7 @@
 
 
 <section id="campanhas">
-  <h2>📣 Campanhas / Verba de Área</h2>
+  <h2>📣 Campanhas / Valor Aprovado por Área</h2>
   <p class="secao-mtime">🕒 Planilha atualizada em 19/08/2026 às 10:35 · <span id="campanhas-periodo-label">—</span></p>
   <div class="filtros-pedidos">
     <input class="filtro" id="filtro-campanhas" placeholder="Buscar por filial, documento ou histórico...">
@@ -612,25 +612,25 @@
     <button id="limpar-campanhas" type="button">Limpar filtros</button>
   </div>
   <div class="cards">
-    <div class="card"><div class="label" id="card-camp-verba-label">Verba do período</div><div class="value" id="card-camp-verba">—</div></div>
-    <div class="card warn"><div class="label">Total Gasto</div><div class="value" id="card-camp-gasto">—</div></div>
+    <div class="card"><div class="label" id="card-camp-verba-label">Aprovado no período</div><div class="value" id="card-camp-verba">—</div></div>
+    <div class="card warn"><div class="label">Total Utilizado</div><div class="value" id="card-camp-gasto">—</div></div>
     <div class="card ok"><div class="label">Saldo Disponível</div><div class="value" id="card-camp-saldo">—</div></div>
-    <div class="card"><div class="label">% da Verba Utilizada</div><div class="value" id="card-camp-pct">—</div></div>
+    <div class="card"><div class="label">% Utilizado</div><div class="value" id="card-camp-pct">—</div></div>
     <div class="card"><div class="label">Lançamentos</div><div class="value" id="card-camp-lanc">—</div></div>
-    <div class="card"><div class="label">Filiais que já usaram verba</div><div class="value" id="card-camp-filiais">—</div></div>
+    <div class="card"><div class="label">Filiais que já utilizaram</div><div class="value" id="card-camp-filiais">—</div></div>
   </div>
   <div class="charts">
-    <div class="chart-box wide"><h4>Verba x Gasto por área <button class="chart-export-btn" data-chart-export="chart-campanhas-area" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-campanhas-area"></canvas></div></div>
-    <div class="chart-box wide"><h4>Verba x Gasto por filial <button class="chart-export-btn" data-chart-export="chart-campanhas-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-campanhas-filial"></canvas></div></div>
+    <div class="chart-box wide"><h4>Aprovado x Utilizado por área <button class="chart-export-btn" data-chart-export="chart-campanhas-area" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-campanhas-area"></canvas></div></div>
+    <div class="chart-box wide"><h4>Aprovado x Utilizado por filial <button class="chart-export-btn" data-chart-export="chart-campanhas-filial" title="Baixar gráfico como imagem">📥 PNG</button></h4><div class="canvas-wrap"><canvas id="chart-campanhas-filial"></canvas></div></div>
   </div>
-  <h3>📋 Verba por filial</h3>
+  <h3>📋 Aprovado por filial</h3>
   <div class="table-toolbar">
     <input class="filtro" data-target="tbl-campanhas-filiais" placeholder="Filtrar por filial ou área...">
     <button class="table-export-btn" data-export="tbl-campanhas-filiais">📥 Exportar Excel</button>
   </div>
   <div class="table-wrap">
   <table id="tbl-campanhas-filiais" class="sortable">
-    <thead><tr><th>Filial</th><th>Área</th><th class="num">Verba do Período</th><th class="num">Gasto</th><th class="num">Saldo</th><th class="num">% Utilizado</th></tr></thead>
+    <thead><tr><th>Filial</th><th>Área</th><th class="num">Aprovado no Período</th><th class="num">Utilizado</th><th class="num">Saldo</th><th class="num">% Utilizado</th></tr></thead>
     <tbody id="tbody-campanhas-filiais"></tbody>
   </table>
   </div>
@@ -1986,8 +1986,8 @@ var chartCampanhasArea = new Chart(document.getElementById('chart-campanhas-area
   data: {
     labels: CHART_DATA.campanhasArea.labels,
     datasets: [
-      { label: 'Verba', data: CHART_DATA.campanhasArea.verba, backgroundColor: COR_ACCENT },
-      { label: 'Gasto', data: CHART_DATA.campanhasArea.gasto, backgroundColor: COR_WARN }
+      { label: 'Aprovado', data: CHART_DATA.campanhasArea.verba, backgroundColor: COR_ACCENT },
+      { label: 'Utilizado', data: CHART_DATA.campanhasArea.gasto, backgroundColor: COR_WARN }
     ]
   },
   options: {
@@ -2006,8 +2006,8 @@ var chartCampanhasFilial = new Chart(document.getElementById('chart-campanhas-fi
   data: {
     labels: CHART_DATA.campanhasFilial.labels,
     datasets: [
-      { label: 'Verba', data: CHART_DATA.campanhasFilial.verba, backgroundColor: COR_ACCENT },
-      { label: 'Gasto', data: CHART_DATA.campanhasFilial.gasto, backgroundColor: COR_WARN }
+      { label: 'Aprovado', data: CHART_DATA.campanhasFilial.verba, backgroundColor: COR_ACCENT },
+      { label: 'Utilizado', data: CHART_DATA.campanhasFilial.gasto, backgroundColor: COR_WARN }
     ]
   },
   options: {
@@ -2065,7 +2065,7 @@ function rotuloPeriodo(deTs, ateTs, nMeses) {
     return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear();
   }
   return 'Período de ' + fmt(lim[0]) + ' até ' + fmt(lim[1]) +
-    ' (' + nMeses + (nMeses === 1 ? ' mês' : ' meses') + ' de verba)';
+    ' (' + nMeses + (nMeses === 1 ? ' mês' : ' meses') + ')';
 }
 
 function renderCampanhas(filtrados, deTs, ateTs) {
@@ -2085,7 +2085,7 @@ function renderCampanhas(filtrados, deTs, ateTs) {
   // filial que aparece so nos lancamentos entra com verba 0 em vez de sumir do total
   Object.keys(gastoPorFilial).forEach(function(fil) {
     if (!CAMPANHAS_TEM_VERBA[fil]) {
-      linhas.push({ filial: fil, area: 'sem verba cadastrada', area_num: '-', verba: 0, gasto: round2(gastoPorFilial[fil]) });
+      linhas.push({ filial: fil, area: 'sem valor aprovado', area_num: '-', verba: 0, gasto: round2(gastoPorFilial[fil]) });
     }
   });
 
@@ -2108,7 +2108,7 @@ function renderCampanhas(filtrados, deTs, ateTs) {
   var comGasto = Object.keys(gastoPorFilial).filter(function(f) { return gastoPorFilial[f]; }).length;
 
   document.getElementById('card-camp-verba-label').textContent =
-    'Verba do período (' + nMeses + (nMeses === 1 ? ' mês' : ' meses') + ')';
+    'Aprovado no período (' + nMeses + (nMeses === 1 ? ' mês' : ' meses') + ')';
   document.getElementById('card-camp-verba').textContent = brlJs(verbaTotal);
   document.getElementById('card-camp-gasto').textContent = brlJs(gastoTotal);
   document.getElementById('card-camp-saldo').textContent = brlJs(round2(verbaTotal - gastoTotal));
