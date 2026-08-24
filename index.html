@@ -147,7 +147,7 @@
   </div>
   <div class="badge-atualizacao">
     <div class="data">🕒 Atualizado em 21/08/2026</div>
-    <div class="gerado">Página gerada em 24/08/2026 15:13</div>
+    <div class="gerado">Página gerada em 24/08/2026 15:27</div>
   </div>
 </header>
 <main>
@@ -2147,8 +2147,45 @@ new Chart(document.getElementById('chart-despesas-filial-mensal'), {
   }
 });
 
+// Aprovado fica com o azul, então os tipos usam as outras cores
 var CORES_TIPO_CAMPANHA = {
-  'Campanha': COR_ACCENT, 'Verba de Área': COR_OK, 'Não separado': COR_NEUTRO, 'Outros': COR_WARN
+  'Campanha': COR_WARN, 'Verba de Área': COR_OK, 'Não separado': COR_NEUTRO, 'Outros': '#a78bfa'
+};
+var TIPOS_CAMPANHA_ORDEM = ['Campanha', 'Verba de Área', 'Não separado', 'Outros'];
+
+// escreve o total de cada pilha no topo dela. o totalNoTopoPlugin das despesas soma
+// todos os datasets; aqui há duas pilhas por área (Aprovado e Utilizado), então o total
+// precisa ser por grupo de empilhamento.
+var totalPorPilhaPlugin = {
+  id: 'totalPorPilha',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    var pilhas = {};
+    chart.data.datasets.forEach(function(ds, di) {
+      var meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      var nome = ds.stack || ('ds' + di);
+      var p = pilhas[nome] || (pilhas[nome] = { totais: [], x: [] });
+      meta.data.forEach(function(barra, i) {
+        p.totais[i] = (p.totais[i] || 0) + (ds.data[i] || 0);
+        p.x[i] = barra.x;
+      });
+    });
+    ctx.save();
+    ctx.font = 'bold 10px Segoe UI, Arial, sans-serif';
+    ctx.fillStyle = corDoTema('--chart-rotulo');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    var yScale = chart.scales.y;
+    Object.keys(pilhas).forEach(function(nome) {
+      var p = pilhas[nome];
+      p.totais.forEach(function(total, i) {
+        if (!total) return;
+        ctx.fillText(brlJs(total), p.x[i], yScale.getPixelForValue(total) - 4);
+      });
+    });
+    ctx.restore();
+  }
 };
 
 // os dados entram em renderCampanhas, para acompanhar o filtro de datas
@@ -2170,11 +2207,11 @@ var chartCampanhasArea = new Chart(document.getElementById('chart-campanhas-area
   data: {
     labels: CHART_DATA.campanhasArea.labels,
     datasets: [
-      { label: 'Aprovado', data: CHART_DATA.campanhasArea.verba, backgroundColor: COR_ACCENT },
-      { label: 'Utilizado', data: CHART_DATA.campanhasArea.gasto, backgroundColor: COR_WARN }
+      { label: 'Aprovado', data: CHART_DATA.campanhasArea.verba, backgroundColor: COR_ACCENT, stack: 'aprovado' },
+      { label: 'Utilizado', data: CHART_DATA.campanhasArea.gasto, backgroundColor: COR_WARN, stack: 'utilizado' }
     ]
   },
-  plugins: [rotuloPorBarra(brlJs, 10)],
+  plugins: [totalPorPilhaPlugin],
   options: {
     responsive: true, maintainAspectRatio: false,
     layout: { padding: { top: 20 } },
@@ -2184,7 +2221,10 @@ var chartCampanhasArea = new Chart(document.getElementById('chart-campanhas-area
       subtitle: { display: true, text: '', color: corDoTema('--chart-texto'), font: { size: 11 }, padding: { bottom: 10 } },
       tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + brlJs(ctx.parsed.y); } } }
     },
-    scales: { y: { grace: '12%', ticks: { callback: function(v) { return brlJs(v); } } } }
+    scales: {
+      x: { stacked: true },
+      y: { stacked: true, grace: '12%', ticks: { callback: function(v) { return brlJs(v); } } }
+    }
   }
 });
 
@@ -2263,8 +2303,11 @@ function renderCampanhas(filtrados, deTs, ateTs) {
   var nMeses = mesesNoPeriodo(deTs, ateTs);
 
   var gastoPorFilial = {};
+  var gastoPorFilialTipo = {};
   filtrados.forEach(function(r) {
     gastoPorFilial[r.filial] = (gastoPorFilial[r.filial] || 0) + r.valor;
+    var porTipoDaFilial = gastoPorFilialTipo[r.filial] || (gastoPorFilialTipo[r.filial] = {});
+    porTipoDaFilial[r.tipo] = (porTipoDaFilial[r.tipo] || 0) + r.valor;
   });
 
   var linhas = CAMPANHAS_VERBA.map(function(f) {
@@ -2329,17 +2372,32 @@ function renderCampanhas(filtrados, deTs, ateTs) {
   chartCampanhasTipo.options.plugins.subtitle.text = periodo;
   chartCampanhasTipo.update();
 
+  // a área de cada filial vem do orçamento (linhas), não do lançamento, para o
+  // rateio bater com a coluna Aprovado
   var porArea = {};
   linhas.forEach(function(l) {
     var b = porArea[l.area_num];
-    if (!b) b = porArea[l.area_num] = { verba: 0, gasto: 0, label: l.area };
+    if (!b) b = porArea[l.area_num] = { verba: 0, label: l.area, tipos: {} };
     b.verba += l.verba;
-    b.gasto += l.gasto;
+    var porTipoDaFilial = gastoPorFilialTipo[l.filial] || {};
+    Object.keys(porTipoDaFilial).forEach(function(t) {
+      b.tipos[t] = (b.tipos[t] || 0) + porTipoDaFilial[t];
+    });
   });
   var areas = Object.keys(porArea).sort();
+  var tiposPresentes = TIPOS_CAMPANHA_ORDEM.filter(function(t) {
+    return areas.some(function(a) { return porArea[a].tipos[t]; });
+  });
   chartCampanhasArea.data.labels = areas.map(function(a) { return porArea[a].label; });
-  chartCampanhasArea.data.datasets[0].data = areas.map(function(a) { return round2(porArea[a].verba); });
-  chartCampanhasArea.data.datasets[1].data = areas.map(function(a) { return round2(porArea[a].gasto); });
+  chartCampanhasArea.data.datasets = [
+    { label: 'Aprovado', stack: 'aprovado', backgroundColor: COR_ACCENT,
+      data: areas.map(function(a) { return round2(porArea[a].verba); }) }
+  ].concat(tiposPresentes.map(function(t) {
+    return {
+      label: t, stack: 'utilizado', backgroundColor: CORES_TIPO_CAMPANHA[t] || COR_NEUTRO,
+      data: areas.map(function(a) { return round2(porArea[a].tipos[t] || 0); })
+    };
+  }));
   chartCampanhasArea.options.plugins.subtitle.text = periodo;
   chartCampanhasArea.update();
 
