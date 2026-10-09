@@ -2,7 +2,7 @@
 """Gera a página HTML do Controle Operacional a partir das planilhas de controle.
 
 Uso: python gerar_pagina.py
-Lê os 3 arquivos em "I:\\Meu Drive\\CONTROLE COMPRAS" e grava index.html
+Lê os 3 arquivos em "C:\\Users\\recru\\Desktop\\CONTROLE COMPRAS" e grava index.html
 nesta mesma pasta (bi-web), pronta para publicar no GitHub Pages.
 """
 import collections
@@ -24,12 +24,19 @@ FAVICON_SVG = (
 )
 FAVICON_HREF = "data:image/svg+xml," + quote(FAVICON_SVG)
 
-BASE = Path(r"I:\Meu Drive\CONTROLE COMPRAS")
+BASE = Path(r"C:\Users\recru\Desktop\CONTROLE COMPRAS")
+# malotes e campanhas continuam no Google Drive, porque outras pessoas alimentam esses dois
+BASE_DRIVE = Path(r"I:\Meu Drive\CONTROLE COMPRAS")
+NO_DRIVE = {"CONTROLE MALOTES.xlsm", "CONTROLE DE CAMPANHAS.xlsx"}
+
+
+def caminho(arquivo):
+    return (BASE_DRIVE if arquivo in NO_DRIVE else BASE) / arquivo
 OUT = Path(__file__).resolve().parent / "index.html"
 
 
 def load(arquivo, aba):
-    wb = openpyxl.load_workbook(BASE / arquivo, data_only=True, read_only=True)
+    wb = openpyxl.load_workbook(caminho(arquivo), data_only=True, read_only=True)
     return list(wb[aba].iter_rows(values_only=True))
 
 
@@ -52,7 +59,7 @@ def load_dicts_skip(arquivo, aba, marcador_cabecalho):
 
 
 def mtime_str(arquivo):
-    ts = (BASE / arquivo).stat().st_mtime
+    ts = caminho(arquivo).stat().st_mtime
     return datetime.fromtimestamp(ts).strftime("%d/%m/%Y às %H:%M")
 
 
